@@ -11,11 +11,8 @@
 
 use crate::config::XDPoSConfig;
 use crate::errors::{XDPoSError, XDPoSResult};
-use crate::snapshot::Snapshot;
-use alloy_primitives::{address, Address, Bytes, TxKind, U256};
-use reth_primitives::TransactionSigned;
-use reth_storage_api::BlockReader;
-use std::collections::{HashMap, HashSet};
+use alloy_primitives::{address, Address, U256};
+use std::collections::HashMap;
 
 /// Reward distribution percentages (from consensus/XDPoS/constants.go)
 /// NOTE: These differ from some documentation. This matches v2.6.8 exactly.
@@ -39,7 +36,7 @@ pub const MERGE_SIGN_RANGE: u64 = 15;
 pub const TIP2019_BLOCK: u64 = 1;
 
 /// Reward log for a signer (matches Go's RewardLog)
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RewardLog {
     /// Number of blocks signed
     pub sign_count: u64,
@@ -58,180 +55,9 @@ impl RewardCalculator {
         Self { config }
     }
 
-    /// Check if a transaction is a block signing transaction.
-    /// Matches v2.6.8: checks target address (0x89), method sig (e341eaa4), and data >= 4 bytes.
-    pub fn is_signing_tx(tx: &TransactionSigned) -> bool {
-        // Check if transaction has a recipient
-        let Some(TxKind::Call(to)) = tx.to() else {
-            return false;
-        };
-
-        // Check if target is BlockSigners contract (0x89)
-        if to != BLOCK_SIGNERS_ADDRESS {
-            return false;
-        }
-
-        // Check if data is at least 4 bytes and starts with sign method signature
-        let input = tx.input();
-        if input.len() < 4 {
-            return false;
-        }
-
-        // Check method signature
-        input[0..4] == SIGN_METHOD_SIG
-    }
-
-    /// Calculate rewards at checkpoint block.
-    /// Implements the algorithm from go-ethereum/consensus/XDPoS/reward.go:GetRewardForCheckpoint
-    ///
-    /// # Algorithm (v2.6.8)
-    /// At checkpoint block N (where N % 900 == 0):
-    /// 1. prevCheckpoint = N - (900 * 2) = N - 1800
-    /// 2. startBlock = prevCheckpoint + 1
-    /// 3. endBlock = startBlock + 900 - 1
-    /// 4. Walk backwards from current block to startBlock by parent hash
-    /// 5. For each block, find signing transactions (tx.to == 0x89, method == e341eaa4)
-    /// 6. Extract block hash from tx data (last 32 bytes) and count signers
-    /// 7. Filter signers: only count those in the masternode list from prevCheckpoint header
-    /// 8. Only count blocks at MergeSignRange (15) intervals OR if block < TIP2019Block
-    /// 9. Calculate total reward = (250 XDC * number_of_signers) / totalSigners * signCount
-    /// 10. Split per signer: 90% to masternode owner, 0% to voters, 10% to foundation
-    ///
-    /// # Returns
-    /// - Map of signer address to RewardLog (sign count + calculated reward)
-    /// - Total signer count (for proportional distribution)
-    pub fn calculate_checkpoint_rewards<DB>(
-        &self,
-        checkpoint_number: u64,
-        chain: &DB,
-        checkpoint_snapshot: &Snapshot,
-    ) -> XDPoSResult<(HashMap<Address, RewardLog>, u64)>
-    where
-        DB: BlockReader,
-    {
-        // Checkpoint must be a multiple of reward_checkpoint
-        let rCheckpoint = self.config.reward_checkpoint;
-        if checkpoint_number % rCheckpoint != 0 {
-            return Err(XDPoSError::Custom(
-                "Not a checkpoint block".to_string(),
-            ));
-        }
-
-        // First checkpoint with rewards is block 1800 (second checkpoint)
-        // At block 1800, we walk from 901 to 1799
-        if checkpoint_number < rCheckpoint * 2 {
-            return Ok((HashMap::new(), 0));
-        }
-
-        // v2.6.8 formula
-        let prev_checkpoint = checkpoint_number - (rCheckpoint * 2);
-        let start_block = prev_checkpoint + 1;
-        let end_block = start_block + rCheckpoint - 1;
-
-        tracing::debug!(
-            checkpoint = checkpoint_number,
-            prev_checkpoint,
-            start_block,
-            end_block,
-            "Calculating checkpoint rewards"
-        );
-
-        // Get the masternode list from the previous checkpoint header
-        let masternodes: HashSet<Address> = checkpoint_snapshot.signers.iter().copied().collect();
-
-        tracing::debug!(
-            masternodes = masternodes.len(),
-            "Masternode list loaded"
-        );
-
-        // Collect signing data: block_number -> list of signer addresses
-        let mut block_signers: HashMap<u64, Vec<Address>> = HashMap::new();
-
-        // Walk backwards through blocks in the signing range
-        // We need to collect all signing transactions in range [start_block, end_block]
-        for block_num in start_block..=end_block {
-            // Read the block from storage
-            let Some(block) = chain.block_by_number(block_num)? else {
-                tracing::warn!(block = block_num, "Block not found during reward scan");
-                continue;
-            };
-
-            let mut signers_for_block = Vec::new();
-
-            // Scan transactions for signing transactions
-            for tx in block.body.transactions() {
-                if !Self::is_signing_tx(tx) {
-                    continue;
-                }
-
-                // Extract the block hash from the signing transaction data (last 32 bytes)
-                let data = tx.input();
-                if data.len() < 36 {
-                    // Need at least 4 (method sig) + 32 (block hash)
-                    continue;
-                }
-
-                // The signed block hash is in the last 32 bytes
-                let signed_block_hash_data = &data[data.len() - 32..];
-
-                // Recover the signer address from the transaction
-                // In go-ethereum, they use types.Sender(signer, tx)
-                // In reth, we can recover from the transaction signature
-                let Some(signer) = tx.recover_signer() else {
-                    tracing::warn!("Failed to recover signer from signing transaction");
-                    continue;
-                };
-
-                // Only count signers that are in the masternode list
-                if masternodes.contains(&signer) {
-                    signers_for_block.push(signer);
-                }
-            }
-
-            if !signers_for_block.is_empty() {
-                block_signers.insert(block_num, signers_for_block);
-            }
-        }
-
-        // Count signatures per signer (matching v2.6.8 logic)
-        let mut signer_logs: HashMap<Address, RewardLog> = HashMap::new();
-        let mut total_signer_count: u64 = 0;
-
-        for block_num in start_block..=end_block {
-            // v2.6.8: only count blocks at MergeSignRange intervals OR if pre-TIP2019
-            let should_count = if block_num < TIP2019_BLOCK {
-                true
-            } else {
-                block_num % MERGE_SIGN_RANGE == 0
-            };
-
-            if !should_count {
-                continue;
-            }
-
-            // Get signers for this block
-            let Some(signers) = block_signers.get(&block_num) else {
-                continue;
-            };
-
-            // Deduplicate signers for this block (same signer can only count once per block)
-            let unique_signers: HashSet<Address> = signers.iter().copied().collect();
-
-            for signer in unique_signers {
-                let log = signer_logs.entry(signer).or_insert_with(RewardLog::default);
-                log.sign_count += 1;
-                total_signer_count += 1;
-            }
-        }
-
-        tracing::info!(
-            checkpoint = checkpoint_number,
-            unique_signers = signer_logs.len(),
-            total_signer_count,
-            "Checkpoint signature scan complete"
-        );
-
-        Ok((signer_logs, total_signer_count))
+    /// Get the config
+    pub fn config(&self) -> &XDPoSConfig {
+        &self.config
     }
 
     /// Calculate the reward amount for each signer.
@@ -283,6 +109,7 @@ impl RewardCalculator {
     /// - 10% to foundation
     ///
     /// # Arguments
+    /// * `owner` - The masternode owner address
     /// * `signer_reward` - Total reward for this signer
     ///
     /// # Returns
@@ -306,7 +133,8 @@ impl RewardCalculator {
         // In v2.6.8, voters are still processed but get 0% of rewards
 
         // Foundation reward (10%)
-        let foundation_reward = (signer_reward * U256::from(REWARD_FOUNDATION_PERCENT)) / U256::from(100);
+        let foundation_reward =
+            (signer_reward * U256::from(REWARD_FOUNDATION_PERCENT)) / U256::from(100);
         if self.config.foundation_wallet != Address::ZERO {
             balances.insert(self.config.foundation_wallet, foundation_reward);
         }
@@ -320,35 +148,87 @@ impl RewardCalculator {
         // No halving in current XDPoS implementation
         U256::from(self.config.reward)
     }
+
+    /// Calculate checkpoint block range for reward calculation.
+    /// Returns (prev_checkpoint, start_block, end_block)
+    ///
+    /// # Algorithm (v2.6.8)
+    /// At checkpoint block N (where N % 900 == 0):
+    /// 1. prevCheckpoint = N - (900 * 2) = N - 1800
+    /// 2. startBlock = prevCheckpoint + 1
+    /// 3. endBlock = startBlock + 900 - 1
+    pub fn calculate_checkpoint_range(
+        &self,
+        checkpoint_number: u64,
+    ) -> XDPoSResult<(u64, u64, u64)> {
+        let rcheckpoint = self.config.reward_checkpoint;
+
+        // Checkpoint must be a multiple of reward_checkpoint
+        if checkpoint_number % rcheckpoint != 0 {
+            return Err(XDPoSError::Custom("Not a checkpoint block".to_string()));
+        }
+
+        // First checkpoint with rewards is block 1800 (second checkpoint)
+        if checkpoint_number < rcheckpoint * 2 {
+            return Err(XDPoSError::Custom(
+                "Before second checkpoint".to_string(),
+            ));
+        }
+
+        // v2.6.8 formula
+        let prev_checkpoint = checkpoint_number - (rcheckpoint * 2);
+        let start_block = prev_checkpoint + 1;
+        let end_block = start_block + rcheckpoint - 1;
+
+        Ok((prev_checkpoint, start_block, end_block))
+    }
+
+    /// Check if a block should be counted for reward calculation.
+    /// v2.6.8: only count blocks at MergeSignRange intervals OR if pre-TIP2019
+    pub fn should_count_block(&self, block_number: u64) -> bool {
+        if block_number < TIP2019_BLOCK {
+            true
+        } else {
+            block_number % MERGE_SIGN_RANGE == 0
+        }
+    }
+}
+
+/// Check if transaction data represents a signing transaction.
+/// Matches v2.6.8: checks target address (0x89), method sig (e341eaa4), and data >= 4 bytes.
+///
+/// # Arguments
+/// * `to` - The recipient address (should be 0x89)
+/// * `data` - Transaction input data
+///
+/// # Returns
+/// `true` if this is a signing transaction
+pub fn is_signing_tx(to: &Address, data: &[u8]) -> bool {
+    // Check if target is BlockSigners contract (0x89)
+    if to != &BLOCK_SIGNERS_ADDRESS {
+        return false;
+    }
+
+    // Check if data is at least 4 bytes and starts with sign method signature
+    if data.len() < 4 {
+        return false;
+    }
+
+    // Check method signature
+    data[0..4] == SIGN_METHOD_SIG
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy_primitives::{hex, Address, Bytes, TxKind};
-    use reth_primitives::{Transaction, TransactionSigned, TxLegacy};
 
     #[test]
     fn test_is_signing_tx_valid() {
-        // Create a valid signing transaction
         let mut data = Vec::new();
         data.extend_from_slice(&SIGN_METHOD_SIG); // Method signature
         data.extend_from_slice(&[0u8; 32]); // Block hash
 
-        let tx = TransactionSigned::from_transaction_and_signature(
-            Transaction::Legacy(TxLegacy {
-                chain_id: Some(50),
-                nonce: 0,
-                gas_price: 2500,
-                gas_limit: 100000,
-                to: TxKind::Call(BLOCK_SIGNERS_ADDRESS),
-                value: U256::ZERO,
-                input: Bytes::from(data),
-            }),
-            alloy_primitives::Signature::test_signature(),
-        );
-
-        assert!(RewardCalculator::is_signing_tx(&tx));
+        assert!(is_signing_tx(&BLOCK_SIGNERS_ADDRESS, &data));
     }
 
     #[test]
@@ -357,20 +237,7 @@ mod tests {
         data.extend_from_slice(&SIGN_METHOD_SIG);
         data.extend_from_slice(&[0u8; 32]);
 
-        let tx = TransactionSigned::from_transaction_and_signature(
-            Transaction::Legacy(TxLegacy {
-                chain_id: Some(50),
-                nonce: 0,
-                gas_price: 2500,
-                gas_limit: 100000,
-                to: TxKind::Call(Address::ZERO), // Wrong address
-                value: U256::ZERO,
-                input: Bytes::from(data),
-            }),
-            alloy_primitives::Signature::test_signature(),
-        );
-
-        assert!(!RewardCalculator::is_signing_tx(&tx));
+        assert!(!is_signing_tx(&Address::ZERO, &data));
     }
 
     #[test]
@@ -379,62 +246,13 @@ mod tests {
         data.extend_from_slice(&[0x12, 0x34, 0x56, 0x78]); // Wrong method
         data.extend_from_slice(&[0u8; 32]);
 
-        let tx = TransactionSigned::from_transaction_and_signature(
-            Transaction::Legacy(TxLegacy {
-                chain_id: Some(50),
-                nonce: 0,
-                gas_price: 2500,
-                gas_limit: 100000,
-                to: TxKind::Call(BLOCK_SIGNERS_ADDRESS),
-                value: U256::ZERO,
-                input: Bytes::from(data),
-            }),
-            alloy_primitives::Signature::test_signature(),
-        );
-
-        assert!(!RewardCalculator::is_signing_tx(&tx));
+        assert!(!is_signing_tx(&BLOCK_SIGNERS_ADDRESS, &data));
     }
 
     #[test]
     fn test_is_signing_tx_short_data() {
         let data = vec![0xe3, 0x41]; // Too short
-
-        let tx = TransactionSigned::from_transaction_and_signature(
-            Transaction::Legacy(TxLegacy {
-                chain_id: Some(50),
-                nonce: 0,
-                gas_price: 2500,
-                gas_limit: 100000,
-                to: TxKind::Call(BLOCK_SIGNERS_ADDRESS),
-                value: U256::ZERO,
-                input: Bytes::from(data),
-            }),
-            alloy_primitives::Signature::test_signature(),
-        );
-
-        assert!(!RewardCalculator::is_signing_tx(&tx));
-    }
-
-    #[test]
-    fn test_is_signing_tx_no_recipient() {
-        let mut data = Vec::new();
-        data.extend_from_slice(&SIGN_METHOD_SIG);
-        data.extend_from_slice(&[0u8; 32]);
-
-        let tx = TransactionSigned::from_transaction_and_signature(
-            Transaction::Legacy(TxLegacy {
-                chain_id: Some(50),
-                nonce: 0,
-                gas_price: 2500,
-                gas_limit: 100000,
-                to: TxKind::Create, // Contract creation
-                value: U256::ZERO,
-                input: Bytes::from(data),
-            }),
-            alloy_primitives::Signature::test_signature(),
-        );
-
-        assert!(!RewardCalculator::is_signing_tx(&tx));
+        assert!(!is_signing_tx(&BLOCK_SIGNERS_ADDRESS, &data));
     }
 
     #[test]
@@ -550,32 +368,76 @@ mod tests {
 
     #[test]
     fn test_checkpoint_calculation_formula() {
+        let config = XDPoSConfig {
+            reward_checkpoint: 900,
+            ..Default::default()
+        };
+        let calculator = RewardCalculator::new(config);
+
         // At checkpoint 1800:
         // prevCheckpoint = 1800 - 1800 = 0
         // startBlock = 0 + 1 = 1
         // endBlock = 1 + 900 - 1 = 900
-        let checkpoint = 1800u64;
-        let rcheckpoint = 900u64;
-
-        let prev_checkpoint = checkpoint - (rcheckpoint * 2);
-        let start_block = prev_checkpoint + 1;
-        let end_block = start_block + rcheckpoint - 1;
-
-        assert_eq!(prev_checkpoint, 0);
-        assert_eq!(start_block, 1);
-        assert_eq!(end_block, 900);
+        let (prev, start, end) = calculator.calculate_checkpoint_range(1800).unwrap();
+        assert_eq!(prev, 0);
+        assert_eq!(start, 1);
+        assert_eq!(end, 900);
 
         // At checkpoint 2700:
         // prevCheckpoint = 2700 - 1800 = 900
         // startBlock = 900 + 1 = 901
         // endBlock = 901 + 900 - 1 = 1800
-        let checkpoint = 2700u64;
-        let prev_checkpoint = checkpoint - (rcheckpoint * 2);
-        let start_block = prev_checkpoint + 1;
-        let end_block = start_block + rcheckpoint - 1;
+        let (prev, start, end) = calculator.calculate_checkpoint_range(2700).unwrap();
+        assert_eq!(prev, 900);
+        assert_eq!(start, 901);
+        assert_eq!(end, 1800);
+    }
 
-        assert_eq!(prev_checkpoint, 900);
-        assert_eq!(start_block, 901);
-        assert_eq!(end_block, 1800);
+    #[test]
+    fn test_checkpoint_range_not_checkpoint() {
+        let config = XDPoSConfig {
+            reward_checkpoint: 900,
+            ..Default::default()
+        };
+        let calculator = RewardCalculator::new(config);
+
+        // Block 1799 is not a checkpoint
+        assert!(calculator.calculate_checkpoint_range(1799).is_err());
+    }
+
+    #[test]
+    fn test_checkpoint_range_before_second() {
+        let config = XDPoSConfig {
+            reward_checkpoint: 900,
+            ..Default::default()
+        };
+        let calculator = RewardCalculator::new(config);
+
+        // Block 900 is the first checkpoint (no rewards)
+        assert!(calculator.calculate_checkpoint_range(900).is_err());
+    }
+
+    #[test]
+    fn test_should_count_block() {
+        let config = XDPoSConfig::default();
+        let calculator = RewardCalculator::new(config);
+
+        // Block 0 should be counted (< TIP2019_BLOCK)
+        assert!(calculator.should_count_block(0));
+
+        // Block 15 should be counted (divisible by MERGE_SIGN_RANGE)
+        assert!(calculator.should_count_block(15));
+
+        // Block 30 should be counted
+        assert!(calculator.should_count_block(30));
+
+        // Block 16 should NOT be counted
+        assert!(!calculator.should_count_block(16));
+
+        // Block 901 should NOT be counted
+        assert!(!calculator.should_count_block(901));
+
+        // Block 900 should be counted (divisible by 15)
+        assert!(calculator.should_count_block(900));
     }
 }
