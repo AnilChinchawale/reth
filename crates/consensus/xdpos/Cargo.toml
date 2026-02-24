@@ -1,0 +1,64 @@
+[package]
+name = "reth-consensus-xdpos"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "XDC Network XDPoS consensus implementation for Reth"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Reth dependencies
+reth-consensus = { workspace = true }
+reth-chainspec = { workspace = true }
+reth-primitives = { workspace = true }
+reth-primitives-traits = { workspace = true }
+reth-execution-types = { workspace = true }
+reth-evm = { workspace = true }
+reth-storage-api = { workspace = true }
+reth-errors = { workspace = true }
+reth-network-peers = { workspace = true }
+
+# Alloy dependencies
+alloy-consensus = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-rlp = { workspace = true }
+alloy-eips = { workspace = true }
+alloy-genesis = { workspace = true }
+
+# Async/sync
+parking_lot = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+
+# Cryptography
+secp256k1 = { version = "0.28", features = ["recovery", "global-context"] }
+sha3 = "0.10"
+
+# Data structures
+lru = "0.12"
+hashbrown = "0.14"
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+[dev-dependencies]
+reth-testing-utils = { workspace = true }
+tokio-test = "0.4"
+
+[features]
+default = ["std"]
+std = []
