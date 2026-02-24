@@ -21,15 +21,17 @@ reth-xdc-node = { workspace = true }
 reth-consensus-xdpos = { workspace = true }
 
 # Reth CLI and node
-reth-cli = { workspace = true }
-reth-cli-runner = { workspace = true }
 reth-node-builder = { workspace = true }
 reth-chainspec = { workspace = true }
 reth-primitives = { workspace = true }
+reth-db = { workspace = true }
+serde_json = { workspace = true }
 
 # Core
 alloy-primitives = { workspace = true }
+dirs = "5.0"
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 clap = { workspace = true }
 eyre = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

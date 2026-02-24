@@ -15,13 +15,20 @@ workspace = true
 # Reth core dependencies
 reth-node-builder = { workspace = true }
 reth-node-api = { workspace = true }
+reth-node-ethereum = { workspace = true }
 reth-chainspec = { workspace = true }
 reth-primitives = { workspace = true }
 reth-primitives-traits = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
+reth-ethereum-forks = { workspace = true }
+reth-ethereum-consensus = { workspace = true }
+reth-ethereum-engine-primitives = { workspace = true }
+reth-ethereum-payload-builder = { workspace = true }
 reth-execution-types = { workspace = true }
 reth-evm = { workspace = true }
 reth-evm-ethereum = { workspace = true }
 reth-storage-api = { workspace = true }
+reth-storage-errors = { workspace = true }
 reth-provider = { workspace = true }
 reth-transaction-pool = { workspace = true }
 reth-network = { workspace = true }
@@ -41,6 +48,8 @@ alloy-primitives = { workspace = true }
 alloy-consensus = { workspace = true }
 alloy-eips = { workspace = true }
 alloy-genesis = { workspace = true }
+alloy-evm = { workspace = true }
+alloy-rpc-types-engine = { workspace = true }
 
 # Revm
 revm = { workspace = true }
@@ -51,6 +60,7 @@ parking_lot = { workspace = true }
 
 # Error handling
 thiserror = { workspace = true }
+eyre = { workspace = true }
 
 # Logging
 tracing = { workspace = true }
@@ -63,5 +73,7 @@ reth-testing-utils = { workspace = true }
 
 [features]
 default = ["std"]
-std = []
+std = [
+    "reth-evm/std",
+]
 optimism = []
