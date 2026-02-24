@@ -22,6 +22,7 @@
 extern crate alloc;
 
 use alloc::sync::Arc;
+use core::num::NonZeroUsize;
 
 mod config;
 mod errors;

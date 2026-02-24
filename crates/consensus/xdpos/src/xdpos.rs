@@ -13,6 +13,7 @@ use crate::{
     v2::XDPoSV2Engine,
 };
 use alloc::{boxed::Box, fmt::Debug, string::String, sync::Arc, vec::Vec};
+use core::num::NonZeroUsize;
 use alloy_consensus::Header;
 use alloy_primitives::{Address, B256};
 use lru::LruCache;
@@ -43,8 +44,12 @@ impl XDPoSConsensus {
         Arc::new(Self {
             config,
             v2_engine,
-            recents: Mutex::new(LruCache::new(INMEMORY_SNAPSHOTS)),
-            signatures: Mutex::new(LruCache::new(INMEMORY_SIGNATURES)),
+            recents: Mutex::new(LruCache::new(
+                NonZeroUsize::new(INMEMORY_SNAPSHOTS).unwrap(),
+            )),
+            signatures: Mutex::new(LruCache::new(
+                NonZeroUsize::new(INMEMORY_SIGNATURES).unwrap(),
+            )),
         })
     }
 
@@ -149,7 +154,7 @@ impl Debug for XDPoSConsensus {
     }
 }
 
-impl<B: Block> Consensus<B> for XDPoSConsensus {
+impl<B: Block<Header = Header>> Consensus<B> for XDPoSConsensus {
     fn validate_body_against_header(
         &self,
         body: &B::Body,
@@ -166,22 +171,16 @@ impl<B: Block> Consensus<B> for XDPoSConsensus {
         &self,
         block: &SealedBlock<B>,
     ) -> Result<(), ConsensusError> {
-        let number = block.number();
+        let number = block.header().number;
 
         if self.is_v2_block(number) {
             // V2 validation
-            let v2_engine = self
-                .v2_engine()
-                .ok_or_else(|| {
-                    ConsensusError::Custom(
-                        XDPoSError::V2EngineNotInitialized.to_string().into(),
-                    )
-                })?;
+            let v2_engine = self.v2_engine().ok_or(XDPoSError::V2EngineNotInitialized)?;
 
             // Decode V2 extra fields
             let _extra_fields = v2_engine
-                .decode_extra_fields(block.extra_data())
-                .map_err(|e| ConsensusError::Custom(e.to_string().into()))?;
+                .decode_extra_fields(&block.header().extra_data)
+                .map_err(|e| ConsensusError::Custom(Arc::new(e)))?;
 
             // TODO: Full V2 validation
 
@@ -192,8 +191,10 @@ impl<B: Block> Consensus<B> for XDPoSConsensus {
                 block.header(),
                 &self.config,
                 None, // parent
+                None, // snapshot
             )
-            .map_err(|e| ConsensusError::Custom(e.to_string().into()))
+            .map(|_| ()) // Discard the Address result
+            .map_err(|e| ConsensusError::Custom(Arc::new(e)))
         }
     }
 }
@@ -243,7 +244,7 @@ where
     }
 }
 
-impl<N: NodePrimitives> FullConsensus<N> for XDPoSConsensus {
+impl<N: NodePrimitives<BlockHeader = Header>> FullConsensus<N> for XDPoSConsensus {
     fn validate_block_post_execution(
         &self,
         block: &RecoveredBlock<N::Block>,
@@ -251,7 +252,7 @@ impl<N: NodePrimitives> FullConsensus<N> for XDPoSConsensus {
         _receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
         // Apply rewards at checkpoint blocks
-        self.apply_rewards(block.block())
+        self.apply_rewards(block.sealed_block())
     }
 }
 

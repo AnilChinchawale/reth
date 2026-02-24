@@ -8,7 +8,7 @@ use crate::{
     spec::{make_genesis_header, ChainSpec},
     BaseFeeParams, BaseFeeParamsKind, EthChainSpec,
 };
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec, vec::Vec};
 use alloy_chains::{Chain, NamedChain};
 use alloy_consensus::constants::EMPTY_OMMER_ROOT_HASH;
 use alloy_eips::eip1559::INITIAL_BASE_FEE;
