@@ -1,0 +1,102 @@
+version: '3.8'
+
+# XDC Reth Docker Compose Configuration
+# Supports both mainnet and Apothem testnet
+
+services:
+  xdc-reth:
+    image: anilchinchawale/reth-xdc:latest
+    container_name: xdc-reth-mainnet
+    restart: unless-stopped
+    
+    # Port mappings
+    ports:
+      - "30303:30303/tcp"   # P2P TCP
+      - "30303:30303/udp"   # P2P UDP (discovery)
+      - "8545:8545"         # HTTP RPC
+      - "8546:8546"         # WebSocket RPC
+      # - "9001:9001"       # Metrics (uncomment if ENABLE_METRICS=true)
+    
+    # Volume mounts
+    volumes:
+      # Persistent blockchain data
+      - ./data:/data
+      # Optional: Mount custom genesis if needed
+      # - ./custom-genesis.json:/genesis/custom.json:ro
+    
+    # Environment variables
+    environment:
+      # Network selection (mainnet or apothem)
+      - NETWORK=mainnet
+      
+      # RPC configuration
+      - RPC_ADDR=0.0.0.0
+      - RPC_PORT=8545
+      
+      # WebSocket configuration
+      - WS_ADDR=0.0.0.0
+      - WS_PORT=8546
+      
+      # P2P configuration
+      - P2P_PORT=30303
+      - DISCOVERY_PORT=30303
+      - MAX_PEERS=50
+      
+      # Optional: Custom bootnodes (comma-separated enode URLs)
+      # - CUSTOM_BOOTNODES=enode://...@ip:port,enode://...@ip:port
+      
+      # Optional: Enable metrics
+      # - ENABLE_METRICS=true
+      # - METRICS_PORT=9001
+      
+      # Data directory (shouldn't need to change)
+      - DATA_DIR=/data
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    
+    # Resource limits (adjust based on your hardware)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '4.0'
+    #       memory: 8G
+    #     reservations:
+    #       cpus: '2.0'
+    #       memory: 4G
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Network mode (bridge is default, can use host for better P2P performance)
+    # network_mode: host
+    
+    # Security options (optional)
+    # security_opt:
+    #   - no-new-privileges:true
+
+# ============================================================================
+# Volumes
+# ============================================================================
+
+volumes:
+  # Named volume for easier management
+  xdc-reth-data:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+
+networks:
+  default:
+    name: xdc-network

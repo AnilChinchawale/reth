@@ -1,0 +1,44 @@
+version: '3.8'
+
+# XDC Reth Docker Compose - Standalone
+# This is the standalone compose file for running XDC Reth independently
+
+services:
+  xdc-reth:
+    image: anilchinchawale/reth-xdc:latest
+    container_name: xdc-reth
+    restart: unless-stopped
+    
+    ports:
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      - "8545:8545"
+      - "8546:8546"
+    
+    volumes:
+      - reth-data:/data
+    
+    environment:
+      - NETWORK=${NETWORK:-mainnet}
+      - RPC_ADDR=0.0.0.0
+      - RPC_PORT=8545
+      - WS_ADDR=0.0.0.0
+      - WS_PORT=8546
+      - MAX_PEERS=50
+      - DATA_DIR=/data
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  reth-data:

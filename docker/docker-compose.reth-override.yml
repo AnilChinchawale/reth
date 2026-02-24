@@ -1,0 +1,52 @@
+version: '3.8'
+
+# XDC Reth Docker Compose - Override for xdc-node-setup
+# This file is meant to be used with docker-compose -f override
+# Extends the base xdc-node-setup configuration
+
+services:
+  xdc-reth:
+    image: anilchinchawale/reth-xdc:latest
+    container_name: xdc-reth-${NETWORK:-mainnet}
+    restart: unless-stopped
+    
+    ports:
+      - "${RETH_P2P_PORT:-30303}:30303/tcp"
+      - "${RETH_P2P_PORT:-30303}:30303/udp"
+      - "${RETH_RPC_PORT:-8545}:8545"
+      - "${RETH_WS_PORT:-8546}:8546"
+    
+    volumes:
+      - ${DATA_DIR:-./reth-data}:/data
+    
+    environment:
+      - NETWORK=${NETWORK:-mainnet}
+      - RPC_ADDR=0.0.0.0
+      - RPC_PORT=8545
+      - WS_ADDR=0.0.0.0
+      - WS_PORT=8546
+      - P2P_PORT=30303
+      - MAX_PEERS=${MAX_PEERS:-50}
+      - ENABLE_METRICS=${ENABLE_METRICS:-false}
+      - METRICS_PORT=${METRICS_PORT:-9001}
+    
+    networks:
+      - xdc-network
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# Reference external network from xdc-node-setup
+networks:
+  xdc-network:
+    external: true
