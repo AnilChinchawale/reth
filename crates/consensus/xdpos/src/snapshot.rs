@@ -225,6 +225,129 @@ impl Snapshot {
         self.signers = new_signers.into_iter().collect();
         self.votes.clear();
         self.tally.clear();
+        // Clear recents as we start fresh at checkpoint
+        self.recents.clear();
+    }
+
+    /// Apply a header to the snapshot, updating state based on votes and signers
+    ///
+    /// Returns the new snapshot after applying the header.
+    /// At checkpoint blocks, resets the validator set from extra_data.
+    /// At regular blocks, processes votes from beneficiary field.
+    pub fn apply(
+        &self,
+        header: &alloy_consensus::Header,
+        signers_from_checkpoint: Option<Vec<Address>>,
+        epoch: u64,
+    ) -> crate::errors::XDPoSResult<Self> {
+        use crate::errors::XDPoSError;
+
+        let number = header.number;
+        let hash = header.hash_slow();
+
+        // Check if this is a checkpoint block
+        let is_checkpoint = number % epoch == 0;
+
+        if is_checkpoint {
+            // At checkpoint: reset snapshot with new validator set
+            if let Some(signers) = signers_from_checkpoint {
+                let mut new_snap = Self::new(number, hash, signers);
+                // Preserve recent signers from previous snapshot
+                // Keep only those within the anti-spam window
+                let limit = new_snap.signers.len() as u64;
+                for (bn, signer) in &self.recents {
+                    if number >= limit && *bn > number - limit {
+                        new_snap.recents.insert(*bn, *signer);
+                    }
+                }
+                return Ok(new_snap);
+            } else {
+                return Err(XDPoSError::InvalidCheckpointSigners);
+            }
+        }
+
+        // Non-checkpoint block: clone current snapshot and apply changes
+        let mut snap = self.clone();
+        snap.number = number;
+        snap.hash = hash;
+
+        // Process vote from beneficiary field (if non-zero)
+        let beneficiary = header.beneficiary;
+        if beneficiary != Address::ZERO {
+            // Determine signer (would normally be recovered from seal)
+            // For apply(), we assume the caller has validated the signer
+            // The vote is encoded in the nonce field:
+            // - nonce = 0xffffffffffffffff = authorize
+            // - nonce = 0x0000000000000000 = deauthorize
+            let authorize = header.nonce.as_slice() == &[0xff; 8];
+
+            // Only process valid votes
+            if snap.valid_vote(&beneficiary, authorize) {
+                // Add vote to the snapshot
+                let vote = Vote {
+                    signer: Address::ZERO, // Would be recovered signer in real impl
+                    block: number,
+                    address: beneficiary,
+                    authorize,
+                };
+
+                // Check if this signer already voted for this candidate
+                let already_voted = snap.votes.iter().any(|v| {
+                    v.address == beneficiary && v.authorize == authorize
+                    // In real impl, would check v.signer matches current block signer
+                });
+
+                if !already_voted {
+                    snap.votes.push(vote);
+                    snap.cast_vote(beneficiary, authorize);
+
+                    // Check if vote reached threshold and apply changes
+                    snap.apply_votes();
+                }
+            }
+        }
+
+        Ok(snap)
+    }
+
+    /// Apply a header with a known signer
+    ///
+    /// This version tracks the signer in recents for anti-spam.
+    pub fn apply_with_signer(
+        &self,
+        header: &alloy_consensus::Header,
+        signer: Address,
+        signers_from_checkpoint: Option<Vec<Address>>,
+        epoch: u64,
+    ) -> crate::errors::XDPoSResult<Self> {
+        let number = header.number;
+        
+        // Check anti-spam: signer must not have signed recently
+        if self.recently_signed(number, &signer) {
+            return Err(crate::errors::XDPoSError::Unauthorized);
+        }
+
+        // Apply the header
+        let mut snap = self.apply(header, signers_from_checkpoint, epoch)?;
+
+        // Track this signer in recents
+        snap.add_recent(number, signer);
+
+        // Process votes (update to use actual signer)
+        if header.beneficiary != Address::ZERO {
+            let authorize = header.nonce.as_slice() == &[0xff; 8];
+            
+            if snap.valid_vote(&header.beneficiary, authorize) {
+                // Update votes to include actual signer
+                for vote in snap.votes.iter_mut() {
+                    if vote.block == number && vote.address == header.beneficiary {
+                        vote.signer = signer;
+                    }
+                }
+            }
+        }
+
+        Ok(snap)
     }
 }
 

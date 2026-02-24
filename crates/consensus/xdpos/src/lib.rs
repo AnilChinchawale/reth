@@ -34,6 +34,9 @@ mod v1;
 mod v2;
 mod xdpos;
 
+#[cfg(test)]
+mod tests;
+
 pub use config::{V2Config, XDPoSConfig};
 pub use errors::XDPoSError;
 pub use extra_data::{hash_without_seal, recover_signer, V1ExtraData};
