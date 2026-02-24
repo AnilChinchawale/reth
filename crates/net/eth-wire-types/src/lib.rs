@@ -51,6 +51,7 @@ pub mod primitives;
 pub use primitives::*;
 
 pub mod snap;
+pub mod xdc_header;
 pub use snap::*;
 
 /// re-export for convenience

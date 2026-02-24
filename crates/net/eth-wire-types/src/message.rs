@@ -144,7 +144,27 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                 }
             }
             EthMessageID::GetBlockHeaders => EthMessage::GetBlockHeaders(Self::decode_request_pair(version, buf)?),
-            EthMessageID::BlockHeaders => EthMessage::BlockHeaders(Self::decode_request_pair(version, buf)?),
+            EthMessageID::BlockHeaders => {
+                if version.is_eth63() {
+                    // XDC eth/63: headers have 18 fields (3 extra XDPoS fields after nonce).
+                    // Decode using XDC-aware decoder that strips the extra fields.
+                    let std_headers = crate::xdc_header::decode_xdc_block_headers(buf)?;
+                    let mut eth_headers = Vec::with_capacity(std_headers.len());
+                    for h in std_headers {
+                        // Re-encode as standard Ethereum header RLP, then decode as N::BlockHeader
+                        let mut re_encoded = Vec::new();
+                        Encodable::encode(&h, &mut re_encoded);
+                        let nh = N::BlockHeader::decode(&mut &re_encoded[..])?;
+                        eth_headers.push(nh);
+                    }
+                    EthMessage::BlockHeaders(RequestPair {
+                        request_id: 0,
+                        message: BlockHeaders(eth_headers),
+                    })
+                } else {
+                    EthMessage::BlockHeaders(Self::decode_request_pair(version, buf)?)
+                }
+            }
             EthMessageID::GetBlockBodies => EthMessage::GetBlockBodies(Self::decode_request_pair(version, buf)?),
             EthMessageID::BlockBodies => EthMessage::BlockBodies(Self::decode_request_pair(version, buf)?),
             EthMessageID::GetPooledTransactions => {

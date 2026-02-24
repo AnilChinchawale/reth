@@ -491,6 +491,42 @@ impl reth_primitives_traits::InMemorySize for XdcBlockHeader {
     }
 }
 
+/// Convert XdcBlockHeader to standard Ethereum Header (strips XDC-specific fields)
+impl From<XdcBlockHeader> for alloy_consensus::Header {
+    fn from(xdc: XdcBlockHeader) -> Self {
+        Self {
+            parent_hash: xdc.parent_hash,
+            ommers_hash: xdc.ommers_hash,
+            beneficiary: xdc.beneficiary,
+            state_root: xdc.state_root,
+            transactions_root: xdc.transactions_root,
+            receipts_root: xdc.receipts_root,
+            logs_bloom: xdc.logs_bloom,
+            difficulty: xdc.difficulty,
+            number: xdc.number,
+            gas_limit: xdc.gas_limit,
+            gas_used: xdc.gas_used,
+            timestamp: xdc.timestamp,
+            extra_data: xdc.extra_data,
+            mix_hash: xdc.mix_hash,
+            nonce: xdc.nonce,
+            base_fee_per_gas: xdc.base_fee_per_gas,
+            withdrawals_root: xdc.withdrawals_root,
+            blob_gas_used: xdc.blob_gas_used,
+            excess_blob_gas: xdc.excess_blob_gas,
+            parent_beacon_block_root: xdc.parent_beacon_block_root,
+            requests_hash: xdc.requests_hash,
+        }
+    }
+}
+
+/// Decode raw RLP bytes as XDC headers, then convert to standard Headers.
+/// This is used by the P2P layer to handle XDC's 18-field block headers.
+pub fn decode_xdc_headers_to_eth(buf: &mut &[u8]) -> alloy_rlp::Result<Vec<alloy_consensus::Header>> {
+    let headers: Vec<XdcBlockHeader> = alloy_rlp::Decodable::decode(buf)?;
+    Ok(headers.into_iter().map(Into::into).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
