@@ -1074,7 +1074,10 @@ where
     where
         T::Provider: reth_provider::CanonChainTracker,
     {
-        if self.node_config().debug.tip.is_none() && !self.is_dev() {
+        // XDC chains (chain_id 50 or 51) are pre-merge PoA chains and don't need consensus layer health checks
+        let is_xdc_chain = matches!(self.chain_id().id(), 50 | 51);
+        
+        if self.node_config().debug.tip.is_none() && !self.is_dev() && !is_xdc_chain {
             Either::Left(
                 ConsensusLayerHealthEvents::new(Box::new(self.blockchain_db().clone()))
                     .map(Into::into),

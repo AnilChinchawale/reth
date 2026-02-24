@@ -13,8 +13,8 @@ use reth_discv5::NetworkStackId;
 use reth_dns_discovery::DnsDiscoveryConfig;
 use reth_eth_wire::{
     handshake::{EthHandshake, EthRlpxHandshake},
-    EthNetworkPrimitives, HelloMessage, HelloMessageWithProtocols, NetworkPrimitives,
-    UnifiedStatus,
+    protocol::Protocol, EthNetworkPrimitives, EthVersion, HelloMessage, HelloMessageWithProtocols,
+    NetworkPrimitives, UnifiedStatus,
 };
 use reth_ethereum_forks::{ForkFilter, Head};
 use reth_network_peers::{mainnet_nodes, pk2id, sepolia_nodes, PeerId, TrustedPeer};
@@ -641,12 +641,32 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
 
         let listener_addr = listener_addr.unwrap_or(DEFAULT_DISCOVERY_ADDRESS);
 
-        let mut hello_message =
-            hello_message.unwrap_or_else(|| HelloMessage::builder(peer_id).build());
+        // get the chain id
+        let chain_id = chain_spec.chain().id();
+        
+        // XDC chains (50, 51) use eth/63 protocol (no request IDs, no ForkID)
+        let is_xdc_chain = matches!(chain_id, 50 | 51);
+
+        let mut hello_message = hello_message.unwrap_or_else(|| {
+            if is_xdc_chain {
+                // For XDC chains, only advertise eth/63 capability
+                HelloMessage::builder(peer_id)
+                    .protocol(Protocol::from(EthVersion::Eth63))
+                    .build()
+            } else {
+                // Default for Ethereum: advertise all versions
+                HelloMessage::builder(peer_id).build()
+            }
+        });
         hello_message.port = listener_addr.port();
 
         // set the status
         let mut status = UnifiedStatus::spec_builder(&chain_spec, &head);
+        
+        // For XDC chains, use eth/63 (no ForkID)
+        if is_xdc_chain {
+            status.set_eth_version(EthVersion::Eth63);
+        }
 
         if let Some(id) = network_id {
             status.chain = id.into();
@@ -654,9 +674,6 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
 
         // set a fork filter based on the chain spec and head
         let fork_filter = chain_spec.fork_filter(head);
-
-        // get the chain id
-        let chain_id = chain_spec.chain().id();
 
         // If default DNS config is used then we add the known dns network to bootstrap from
         if let Some(dns_networks) =

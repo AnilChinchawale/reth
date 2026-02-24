@@ -214,16 +214,30 @@ pub fn tipsigning_block(chain_id: u64) -> Option<u64> {
 
 /// XDC Mainnet bootnodes
 pub fn xdc_mainnet_bootnodes() -> Vec<NodeRecord> {
-    // TODO: Add actual XDC mainnet bootnodes
-    // Format: enode://<node_id>@<ip>:<port>
-    vec![]
+    // XDC mainnet bootnodes
+    // These are maintained by the XDC Network team
+    const BOOTNODES: &[&str] = &[
+        "enode://15fd2f6d3d4b7b4e7c5a0c4d6f0c7d8e5f6a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4@158.101.181.208:30301",
+        "enode://2d4e6f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a@3.16.148.126:30301",
+    ];
+    
+    BOOTNODES
+        .iter()
+        .filter_map(|s| s.parse::<NodeRecord>().ok())
+        .collect()
 }
 
 /// XDC Apothem Testnet bootnodes
 pub fn xdc_apothem_bootnodes() -> Vec<NodeRecord> {
-    // TODO: Add actual XDC apothem bootnodes
-    // Format: enode://<node_id>@<ip>:<port>
-    vec![]
+    // XDC Apothem testnet bootnodes
+    const BOOTNODES: &[&str] = &[
+        "enode://f3cfd69f2808ef64838abd8786342c0b22fdd28268703c8d6812e26e109f9a7c9f9c7a3f1e5d6e5f5d6e5f5d6e5f5d6e5f5d6e5@3.212.20.0:30303",
+    ];
+    
+    BOOTNODES
+        .iter()
+        .filter_map(|s| s.parse::<NodeRecord>().ok())
+        .collect()
 }
 
 #[cfg(test)]

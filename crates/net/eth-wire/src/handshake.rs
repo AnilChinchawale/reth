@@ -188,15 +188,22 @@ where
         }
 
         // Fork validation
-        if let Err(err) = fork_filter
-            .validate(their_status_message.forkid())
-            .map_err(EthHandshakeError::InvalidFork)
-        {
-            unauth
-                .disconnect(DisconnectReason::ProtocolBreach)
-                .await
-                .map_err(EthStreamError::from)?;
-            return Err(err.into());
+        // Skip ForkID validation for XDC chains (chain_id 50 or 51) and eth/63 connections
+        // XDC nodes use eth/63 which doesn't have ForkID support
+        let is_xdc_chain = matches!(status.chain().id(), 50 | 51);
+        let is_eth63 = matches!(their_status_message, StatusMessage::Eth63(_));
+        
+        if !is_xdc_chain && !is_eth63 {
+            if let Err(err) = fork_filter
+                .validate(their_status_message.forkid())
+                .map_err(EthHandshakeError::InvalidFork)
+            {
+                unauth
+                    .disconnect(DisconnectReason::ProtocolBreach)
+                    .await
+                    .map_err(EthStreamError::from)?;
+                return Err(err.into());
+            }
         }
 
         if let StatusMessage::Eth69(s) = &their_status_message {

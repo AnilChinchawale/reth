@@ -772,6 +772,13 @@ impl<H: BlockHeader> ChainSpec<H> {
     pub fn bootnodes(&self) -> Option<Vec<NodeRecord>> {
         use NamedChain as C;
 
+        // Check for XDC chains by chain ID (not named chains)
+        match self.chain.id() {
+            50 => return Some(crate::xdc::xdc_mainnet_bootnodes()),
+            51 => return Some(crate::xdc::xdc_apothem_bootnodes()),
+            _ => {}
+        }
+
         match self.chain.try_into().ok()? {
             C::Mainnet => Some(mainnet_nodes()),
             C::Sepolia => Some(sepolia_nodes()),
