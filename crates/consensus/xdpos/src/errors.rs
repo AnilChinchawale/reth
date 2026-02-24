@@ -115,6 +115,14 @@ pub enum XDPoSError {
     #[error("insufficient signatures: have {have}, need {need}")]
     InsufficientSignatures { have: usize, need: usize },
 
+    /// Invalid checkpoint block number
+    #[error("invalid checkpoint block: {0}")]
+    InvalidCheckpoint(u64),
+
+    /// Missing block header
+    #[error("missing block header at block {0}")]
+    MissingBlockHeader(u64),
+
     /// Custom error message
     #[error("{0}")]
     Custom(String),

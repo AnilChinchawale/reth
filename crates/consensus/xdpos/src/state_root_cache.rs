@@ -48,11 +48,12 @@ pub const PERSIST_INTERVAL: u64 = 100;
 pub const BACKWARD_SCAN_RANGE: u64 = 10_000;
 
 /// Persistent cache mapping remote state roots to local state roots
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct XdcStateRootCache {
     inner: Arc<RwLock<CacheInner>>,
 }
 
+#[derive(Debug)]
 struct CacheInner {
     /// remote_root → local_root mapping
     remote_to_local: HashMap<B256, B256>,

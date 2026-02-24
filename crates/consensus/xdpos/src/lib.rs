@@ -25,11 +25,13 @@ use alloc::sync::Arc;
 
 mod config;
 mod errors;
+pub mod execution;
 mod extra_data;
 mod reward;
 mod snapshot;
 pub mod special_tx;
 mod state_root_cache;
+pub mod sync;
 mod validation;
 mod v1;
 mod v2;
@@ -40,9 +42,16 @@ mod tests;
 
 pub use config::{V2Config, XDPoSConfig};
 pub use errors::XDPoSError;
+pub use execution::{
+    apply_checkpoint_rewards, finalize_state_root, get_epoch_range, should_apply_rewards,
+    validate_state_root, ConsensusVersion,
+};
 pub use extra_data::{hash_without_seal, recover_signer, V1ExtraData};
 pub use snapshot::{Snapshot, Tally, Vote};
 pub use state_root_cache::{CacheStats, XdcStateRootCache};
+pub use sync::{
+    is_checkpoint_block, XdcBlockExecutor, XdcSyncConfig, XdcSyncMode, XdcSyncStats,
+};
 pub use xdpos::XDPoSConsensus;
 
 pub use v2::{
