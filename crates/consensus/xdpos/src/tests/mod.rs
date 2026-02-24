@@ -1,3 +1,4 @@
-//! Unit tests for XDPoS V1 consensus implementation
+//! Unit tests for XDPoS consensus implementation
 
 mod v1_tests;
+mod v2_tests;

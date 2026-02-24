@@ -17,7 +17,7 @@ use alloy_consensus::Header;
 use alloy_primitives::{Address, B256};
 use lru::LruCache;
 use parking_lot::Mutex;
-use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator};
+use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator, ReceiptRootBloom};
 use reth_execution_types::BlockExecutionResult;
 use reth_primitives_traits::{
     Block, NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader,
@@ -59,7 +59,7 @@ impl XDPoSConsensus {
     }
 
     /// Get the V2 engine
-    pub fn v2_engine(&self) -> Option<,XDPoSV2Engine>> {
+    pub fn v2_engine(&self) -> Option<&XDPoSV2Engine> {
         self.v2_engine.as_ref().map(|e| e.as_ref())
     }
 
@@ -248,8 +248,7 @@ impl<N: NodePrimitives> FullConsensus<N> for XDPoSConsensus {
         &self,
         block: &RecoveredBlock<N::Block>,
         _result: &BlockExecutionResult<N::Receipt>,
-        _receipt_root_bloom: Option<<N::Receipt as reth_primitives_traits::Receipt
-type definitions>,
+        _receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
         // Apply rewards at checkpoint blocks
         self.apply_rewards(block.block())

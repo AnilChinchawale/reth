@@ -1,11 +1,21 @@
-//! XDPoS V2 BFT Consensus Types
+//! XDPoS V2 BFT Consensus
 //!
-//! This module contains the types used by XDPoS V2 consensus including:
-//! - Round numbers
+//! This module implements the complete XDPoS V2 BFT consensus including:
+//! - Round-based consensus with round numbers
 //! - BlockInfo for BFT messages
-//! - Quorum Certificates (QC)
-//! - Timeout Certificates (TC)
-//! - V2-specific extra field handling
+//! - Quorum Certificates (QC) - proof of 2/3+1 validator agreement
+//! - Timeout Certificates (TC) - proof of 2/3+1 validator timeout
+//! - V2-specific extra field handling with RLP encoding
+//! - Signature verification for QC/TC
+//! - Proposer selection (round-robin)
+
+pub mod engine;
+pub mod proposer;
+pub mod types;
+pub mod verification;
+
+// Re-export main engine
+pub use engine::XDPoSV2Engine;
 
 use alloc::vec::Vec;
 use alloy_primitives::{Address, B256};
