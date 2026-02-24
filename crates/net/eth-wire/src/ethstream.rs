@@ -166,7 +166,13 @@ where
             return Err(EthStreamError::EthHandshakeError(EthHandshakeError::StatusNotInHandshake));
         }
 
-        Ok(Bytes::from(alloy_rlp::encode(ProtocolMessage::from(item))))
+        let protocol_msg = ProtocolMessage::from(item);
+        
+        // Use version-aware encoding for eth/63 compatibility
+        let mut out = Vec::new();
+        protocol_msg.encode_with_version(self.version, &mut out);
+        
+        Ok(Bytes::from(out))
     }
 }
 

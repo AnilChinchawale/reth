@@ -60,6 +60,21 @@ pub struct ProtocolMessage<N: NetworkPrimitives = EthNetworkPrimitives> {
 }
 
 impl<N: NetworkPrimitives> ProtocolMessage<N> {
+    /// Helper to decode messages that use RequestPair in eth/66+ but not in eth/63
+    fn decode_request_pair<T>(version: EthVersion, buf: &mut &[u8]) -> Result<RequestPair<T>, MessageError>
+    where
+        T: Decodable,
+    {
+        if version.is_eth63() {
+            // eth/63: no request ID wrapper, just decode the message directly
+            let message = T::decode(buf)?;
+            Ok(RequestPair { request_id: 0, message })
+        } else {
+            // eth/66+: decode RequestPair with request ID
+            Ok(RequestPair::decode(buf)?)
+        }
+    }
+
     /// Decode only a Status message from RLP bytes.
     ///
     /// This is used during the eth handshake where only a Status message is a valid response.
@@ -74,9 +89,15 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
             return Err(MessageError::ExpectedStatusMessage(message_type))
         }
 
-        let status = if version < EthVersion::Eth69 {
+        let status = if version.is_eth63() {
+            // eth/63: 5-field status without ForkID (XDC compatibility)
+            use crate::status::StatusEth63;
+            StatusMessage::Eth63(StatusEth63::decode(buf)?)
+        } else if version < EthVersion::Eth69 {
+            // eth/66-68: Legacy status with ForkID
             StatusMessage::Legacy(Status::decode(buf)?)
         } else {
+            // eth/69+: Status without total difficulty
             StatusMessage::Eth69(StatusEth69::decode(buf)?)
         };
 
@@ -91,10 +112,17 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
 
         // For EIP-7642 (https://github.com/ethereum/EIPs/blob/master/EIPS/eip-7642.md):
         // pre-merge (legacy) status messages include total difficulty, whereas eth/69 omits it.
+        // eth/63 has no ForkID (XDC compatibility).
         let message = match message_type {
-            EthMessageID::Status => EthMessage::Status(if version < EthVersion::Eth69 {
+            EthMessageID::Status => EthMessage::Status(if version.is_eth63() {
+                // eth/63: 5-field status without ForkID
+                use crate::status::StatusEth63;
+                StatusMessage::Eth63(StatusEth63::decode(buf)?)
+            } else if version < EthVersion::Eth69 {
+                // eth/66-68: Legacy status with ForkID
                 StatusMessage::Legacy(Status::decode(buf)?)
             } else {
+                // eth/69+: Status without total difficulty
                 StatusMessage::Eth69(StatusEth69::decode(buf)?)
             }),
             EthMessageID::NewBlockHashes => {
@@ -115,33 +143,33 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                     )?)
                 }
             }
-            EthMessageID::GetBlockHeaders => EthMessage::GetBlockHeaders(RequestPair::decode(buf)?),
-            EthMessageID::BlockHeaders => EthMessage::BlockHeaders(RequestPair::decode(buf)?),
-            EthMessageID::GetBlockBodies => EthMessage::GetBlockBodies(RequestPair::decode(buf)?),
-            EthMessageID::BlockBodies => EthMessage::BlockBodies(RequestPair::decode(buf)?),
+            EthMessageID::GetBlockHeaders => EthMessage::GetBlockHeaders(Self::decode_request_pair(version, buf)?),
+            EthMessageID::BlockHeaders => EthMessage::BlockHeaders(Self::decode_request_pair(version, buf)?),
+            EthMessageID::GetBlockBodies => EthMessage::GetBlockBodies(Self::decode_request_pair(version, buf)?),
+            EthMessageID::BlockBodies => EthMessage::BlockBodies(Self::decode_request_pair(version, buf)?),
             EthMessageID::GetPooledTransactions => {
-                EthMessage::GetPooledTransactions(RequestPair::decode(buf)?)
+                EthMessage::GetPooledTransactions(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::PooledTransactions => {
-                EthMessage::PooledTransactions(RequestPair::decode(buf)?)
+                EthMessage::PooledTransactions(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::GetNodeData => {
                 if version >= EthVersion::Eth67 {
                     return Err(MessageError::Invalid(version, EthMessageID::GetNodeData))
                 }
-                EthMessage::GetNodeData(RequestPair::decode(buf)?)
+                EthMessage::GetNodeData(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::NodeData => {
                 if version >= EthVersion::Eth67 {
                     return Err(MessageError::Invalid(version, EthMessageID::NodeData))
                 }
-                EthMessage::NodeData(RequestPair::decode(buf)?)
+                EthMessage::NodeData(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::GetReceipts => {
                 if version >= EthVersion::Eth70 {
-                    EthMessage::GetReceipts70(RequestPair::decode(buf)?)
+                    EthMessage::GetReceipts70(Self::decode_request_pair(version, buf)?)
                 } else {
-                    EthMessage::GetReceipts(RequestPair::decode(buf)?)
+                    EthMessage::GetReceipts(Self::decode_request_pair(version, buf)?)
                 }
             }
             EthMessageID::Receipts => {
@@ -150,15 +178,15 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                         // eth/70 continues to omit bloom filters and adds the
                         // `lastBlockIncomplete` flag, encoded as
                         // `[request-id, lastBlockIncomplete, [[receipt₁, receipt₂], ...]]`.
-                        EthMessage::Receipts70(RequestPair::decode(buf)?)
+                        EthMessage::Receipts70(Self::decode_request_pair(version, buf)?)
                     }
                     EthVersion::Eth69 => {
                         // with eth69, receipts no longer include the bloom
-                        EthMessage::Receipts69(RequestPair::decode(buf)?)
+                        EthMessage::Receipts69(Self::decode_request_pair(version, buf)?)
                     }
                     _ => {
                         // before eth69 we need to decode the bloom  as well
-                        EthMessage::Receipts(RequestPair::decode(buf)?)
+                        EthMessage::Receipts(Self::decode_request_pair(version, buf)?)
                     }
                 }
             }
@@ -172,13 +200,13 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                 if version < EthVersion::Eth71 {
                     return Err(MessageError::Invalid(version, EthMessageID::GetBlockAccessLists))
                 }
-                EthMessage::GetBlockAccessLists(RequestPair::decode(buf)?)
+                EthMessage::GetBlockAccessLists(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::BlockAccessLists => {
                 if version < EthVersion::Eth71 {
                     return Err(MessageError::Invalid(version, EthMessageID::BlockAccessLists))
                 }
-                EthMessage::BlockAccessLists(RequestPair::decode(buf)?)
+                EthMessage::BlockAccessLists(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::Other(_) => {
                 let raw_payload = Bytes::copy_from_slice(buf);
@@ -202,6 +230,59 @@ impl<N: NetworkPrimitives> Encodable for ProtocolMessage<N> {
     }
     fn length(&self) -> usize {
         self.message_type.length() + self.message.length()
+    }
+}
+
+impl<N: NetworkPrimitives> ProtocolMessage<N> {
+    /// Version-aware encoding for eth/63 compatibility
+    /// 
+    /// For eth/63, request/response messages are encoded without the request_id wrapper.
+    /// For eth/66+, they are encoded with RequestPair.
+    pub fn encode_with_version(&self, version: EthVersion, out: &mut dyn BufMut) {
+        self.message_type.encode(out);
+        
+        if version.is_eth63() {
+            // For eth/63, encode messages without RequestPair wrapper
+            match &self.message {
+                EthMessage::GetBlockHeaders(pair) => pair.message.encode(out),
+                EthMessage::BlockHeaders(pair) => pair.message.encode(out),
+                EthMessage::GetBlockBodies(pair) => pair.message.encode(out),
+                EthMessage::BlockBodies(pair) => pair.message.encode(out),
+                EthMessage::GetPooledTransactions(pair) => pair.message.encode(out),
+                EthMessage::PooledTransactions(pair) => pair.message.encode(out),
+                EthMessage::GetNodeData(pair) => pair.message.encode(out),
+                EthMessage::NodeData(pair) => pair.message.encode(out),
+                EthMessage::GetReceipts(pair) => pair.message.encode(out),
+                EthMessage::Receipts(pair) => pair.message.encode(out),
+                _ => self.message.encode(out),
+            }
+        } else {
+            // For eth/66+, encode normally (with RequestPair)
+            self.message.encode(out);
+        }
+    }
+    
+    /// Version-aware length calculation
+    pub fn length_with_version(&self, version: EthVersion) -> usize {
+        let msg_len = if version.is_eth63() {
+            match &self.message {
+                EthMessage::GetBlockHeaders(pair) => pair.message.length(),
+                EthMessage::BlockHeaders(pair) => pair.message.length(),
+                EthMessage::GetBlockBodies(pair) => pair.message.length(),
+                EthMessage::BlockBodies(pair) => pair.message.length(),
+                EthMessage::GetPooledTransactions(pair) => pair.message.length(),
+                EthMessage::PooledTransactions(pair) => pair.message.length(),
+                EthMessage::GetNodeData(pair) => pair.message.length(),
+                EthMessage::NodeData(pair) => pair.message.length(),
+                EthMessage::GetReceipts(pair) => pair.message.length(),
+                EthMessage::Receipts(pair) => pair.message.length(),
+                _ => self.message.length(),
+            }
+        } else {
+            self.message.length()
+        };
+        
+        self.message_type.length() + msg_len
     }
 }
 

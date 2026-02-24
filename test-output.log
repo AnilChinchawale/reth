@@ -1,0 +1,16 @@
+=== Testing Reth-XDC eth/63 Protocol Negotiation ===
+
+Stopping any running xdc-reth instances...
+Cleaning data directory...
+Starting xdc-reth with XDC mainnet config...
+Started xdc-reth (PID: 2335887)
+
+Waiting for RPC to be ready...
+
+=== Initial Status ===
+Network version:
+
+Peer count:
+
+=== Adding Local GP5 Peer ===
+Peer enode: enode://6733ac7dcaa84827d1b02eccd9eddfcdf1e25066458c9e1c88ca51853b3c54e10eb3d0a80856ce8a80908332a2f16f98ee1475c534e3aa74b2d75938fd4c329a@127.0.0.1:30307
