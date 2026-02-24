@@ -10741,6 +10741,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "reth-xdc-primitives"
+version = "1.11.1"
+dependencies = [
+ "alloy-consensus",
+ "alloy-primitives",
+ "alloy-rlp",
+ "reth-eth-wire-types",
+ "reth-ethereum-primitives",
+ "reth-primitives-traits",
+ "serde",
+]
+
+[[package]]
 name = "reth-zstd-compressors"
 version = "1.11.1"
 dependencies = [

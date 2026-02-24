@@ -26,6 +26,7 @@ members = [
     "crates/consensus/debug-client/",
     "crates/consensus/xdpos/",
     "crates/xdc/node/",
+    "crates/xdc/primitives/",
     "crates/e2e-test-utils/",
     "crates/engine/invalid-block-hooks/",
     "crates/engine/local",
@@ -341,6 +342,7 @@ reth-consensus = { path = "crates/consensus/consensus", default-features = false
 reth-consensus-common = { path = "crates/consensus/common", default-features = false }
 reth-consensus-xdpos = { path = "crates/consensus/xdpos", default-features = false }
 reth-xdc-node = { path = "crates/xdc/node", default-features = false }
+reth-xdc-primitives = { path = "crates/xdc/primitives", default-features = false }
 reth-consensus-debug-client = { path = "crates/consensus/debug-client" }
 reth-db = { path = "crates/storage/db", default-features = false }
 reth-db-api = { path = "crates/storage/db-api" }
