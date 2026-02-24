@@ -38,8 +38,10 @@ pub mod executor;
 pub mod payload;
 pub mod build;
 pub mod receipt;
+pub mod network;
 
 use evm::XdcEvmConfig;
+use network::XdcNetworkBuilder;
 
 /// XDC Network node
 ///
@@ -70,7 +72,7 @@ where
         N,
         reth_node_ethereum::EthereumPoolBuilder,
         reth_node_builder::components::BasicPayloadServiceBuilder<reth_node_ethereum::EthereumPayloadBuilder>,
-        reth_node_ethereum::EthereumNetworkBuilder,
+        XdcNetworkBuilder,
         XdcExecutorBuilder,
         reth_node_ethereum::EthereumConsensusBuilder,
     >;
@@ -87,7 +89,7 @@ where
             .pool(reth_node_ethereum::EthereumPoolBuilder::default())
             .executor(XdcExecutorBuilder::default())
             .payload(reth_node_builder::components::BasicPayloadServiceBuilder::default())
-            .network(reth_node_ethereum::EthereumNetworkBuilder::default())
+            .network(XdcNetworkBuilder::default())
             .consensus(reth_node_ethereum::EthereumConsensusBuilder::default())
     }
 
@@ -158,43 +160,6 @@ where
     }
 }
 
-/// XDC network builder
-#[derive(Debug, Default, Clone, Copy)]
-pub struct XdcNetworkBuilder;
-
-impl<N, Pool> RethNetworkBuilder<N, Pool> for XdcNetworkBuilder
-where
-    N: FullNodeTypes<Types: NodeTypes<ChainSpec: reth_ethereum_forks::Hardforks>>,
-    Pool: reth_transaction_pool::TransactionPool<
-            Transaction: reth_transaction_pool::PoolTransaction<
-                Consensus = reth_node_api::TxTy<N::Types>,
-            >,
-        > + Unpin
-        + 'static,
-{
-    type Network = reth_network::NetworkHandle<
-        reth_network::primitives::BasicNetworkPrimitives<
-            reth_node_api::PrimitivesTy<N::Types>,
-            reth_transaction_pool::PoolPooledTx<Pool>,
-        >,
-    >;
-
-    async fn build_network(
-        self,
-        ctx: &BuilderContext<N>,
-        pool: Pool,
-    ) -> eyre::Result<Self::Network> {
-        info!(
-            chain_id = ctx.chain_spec().chain().id(),
-            "Building XDC network"
-        );
-
-        let network = ctx.network_builder().await?;
-        let handle = ctx.start_network(network, pool);
-        info!(target: "reth::cli", enode=%handle.local_enr(), "P2P networking initialized");
-        Ok(handle)
-    }
-}
 
 /// XDC consensus builder
 #[derive(Debug, Default, Clone, Copy)]

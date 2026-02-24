@@ -19,6 +19,8 @@ pub struct ParseVersionError(String);
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
 pub enum EthVersion {
+    /// The `eth` protocol version 63 (legacy, XDC-compatible, no request IDs).
+    Eth63 = 63,
     /// The `eth` protocol version 66.
     Eth66 = 66,
     /// The `eth` protocol version 67.
@@ -39,6 +41,11 @@ impl EthVersion {
 
     /// All known eth versions
     pub const ALL_VERSIONS: &'static [Self] = &[Self::Eth69, Self::Eth68, Self::Eth67, Self::Eth66];
+
+    /// Returns true if the version is eth/63 (legacy, no request IDs)
+    pub const fn is_eth63(&self) -> bool {
+        matches!(self, Self::Eth63)
+    }
 
     /// Returns true if the version is eth/66
     pub const fn is_eth66(&self) -> bool {
@@ -73,6 +80,12 @@ impl EthVersion {
     /// Returns true if the version is eth/69 or newer.
     pub const fn is_eth69_or_newer(&self) -> bool {
         matches!(self, Self::Eth69 | Self::Eth70 | Self::Eth71)
+    }
+
+    /// Returns true if this version has request IDs (eth/66+).
+    /// eth/63 does NOT have request IDs.
+    pub const fn has_request_ids(&self) -> bool {
+        !self.is_eth63()
     }
 }
 
@@ -111,6 +124,7 @@ impl TryFrom<&str> for EthVersion {
     #[inline]
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         match s {
+            "63" => Ok(Self::Eth63),
             "66" => Ok(Self::Eth66),
             "67" => Ok(Self::Eth67),
             "68" => Ok(Self::Eth68),
@@ -137,6 +151,7 @@ impl TryFrom<u8> for EthVersion {
     #[inline]
     fn try_from(u: u8) -> Result<Self, Self::Error> {
         match u {
+            63 => Ok(Self::Eth63),
             66 => Ok(Self::Eth66),
             67 => Ok(Self::Eth67),
             68 => Ok(Self::Eth68),
@@ -168,6 +183,7 @@ impl From<EthVersion> for &'static str {
     #[inline]
     fn from(v: EthVersion) -> &'static str {
         match v {
+            EthVersion::Eth63 => "63",
             EthVersion::Eth66 => "66",
             EthVersion::Eth67 => "67",
             EthVersion::Eth68 => "68",

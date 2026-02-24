@@ -8,7 +8,10 @@ use crate::{
     config::XDPoSConfig,
     constants::{EXTRA_SEAL, EXTRA_VANITY, INMEMORY_SIGNATURES, INMEMORY_SNAPSHOTS},
     errors::{XDPoSError, XDPoSResult},
+    execution::{finalize_state_root, should_apply_rewards},
+    reward::RewardCalculator,
     snapshot::Snapshot,
+    state_root_cache::XdcStateRootCache,
     v1,
     v2::XDPoSV2Engine,
 };
@@ -23,6 +26,7 @@ use reth_execution_types::BlockExecutionResult;
 use reth_primitives_traits::{
     Block, NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader,
 };
+use tracing::{debug, info, trace};
 
 /// XDPoS Consensus Engine
 pub struct XDPoSConsensus {
@@ -34,12 +38,29 @@ pub struct XDPoSConsensus {
     recents: Mutex<LruCache<B256, Snapshot>>,
     /// Recent signatures cache
     signatures: Mutex<LruCache<B256, Address>>,
+    /// State root cache for checkpoint blocks
+    state_root_cache: Arc<XdcStateRootCache>,
+    /// Reward calculator
+    reward_calculator: RewardCalculator,
 }
 
 impl XDPoSConsensus {
     /// Create a new XDPoS consensus engine
     pub fn new(config: XDPoSConfig) -> Arc<Self> {
+        Self::new_with_cache(config, None)
+    }
+
+    /// Create a new XDPoS consensus engine with custom cache path
+    pub fn new_with_cache(config: XDPoSConfig, cache_path: Option<std::path::PathBuf>) -> Arc<Self> {
         let v2_engine = config.v2.as_ref().map(|_| XDPoSV2Engine::new(config.clone()));
+        let state_root_cache = Arc::new(XdcStateRootCache::with_default_size(cache_path));
+        let reward_calculator = RewardCalculator::new(config.clone());
+
+        info!(
+            epoch = config.epoch,
+            v2_enabled = v2_engine.is_some(),
+            "Initialized XDPoS consensus engine"
+        );
 
         Arc::new(Self {
             config,
@@ -50,6 +71,8 @@ impl XDPoSConsensus {
             signatures: Mutex::new(LruCache::new(
                 NonZeroUsize::new(INMEMORY_SIGNATURES).unwrap(),
             )),
+            state_root_cache,
+            reward_calculator,
         })
     }
 
@@ -137,11 +160,78 @@ impl XDPoSConsensus {
     /// Apply rewards at checkpoint blocks
     pub fn apply_rewards(
         &self,
-        _block: &SealedBlock<impl Block>,
+        block: &SealedBlock<impl Block>,
     ) -> Result<(), ConsensusError> {
-        // TODO: Implement reward distribution
-        // Only apply at checkpoint blocks (number % epoch == 0)
+        let block_number = block.header().number();
+
+        // Only apply at checkpoint blocks
+        if should_apply_rewards(block_number, self.config.epoch) {
+            debug!(
+                block = block_number,
+                epoch = self.config.epoch,
+                "Checkpoint block detected - rewards would be applied here"
+            );
+
+            // TODO: Implement full reward distribution
+            // This requires:
+            // 1. Walk through the epoch (previous 900 blocks)
+            // 2. Count validator signatures using recover_signer
+            // 3. Calculate reward distribution using reward_calculator
+            // 4. Apply balance changes (requires ExecutionOutcome mutation)
+            //
+            // Note: Actual reward application happens during execution via
+            // apply_checkpoint_rewards() called from the executor, not here.
+            // This validation hook just verifies the result.
+        }
+
         Ok(())
+    }
+
+    /// Validate state root with cache integration
+    ///
+    /// For checkpoint blocks, checks the state root cache to handle known divergences
+    /// between XDC clients. Returns the finalized state root that should be used.
+    pub fn validate_state_root(
+        &self,
+        block_number: u64,
+        header_root: B256,
+        computed_root: B256,
+    ) -> Result<B256, ConsensusError> {
+        let finalized_root = finalize_state_root(
+            block_number,
+            header_root,
+            computed_root,
+            &self.state_root_cache,
+            self.config.epoch,
+        );
+
+        // Check if roots match (either directly or via cache)
+        if finalized_root != header_root && finalized_root != computed_root {
+            return Err(ConsensusError::StateRootMismatch {
+                computed: computed_root,
+                expected: header_root,
+            });
+        }
+
+        trace!(
+            block = block_number,
+            header = %header_root,
+            computed = %computed_root,
+            finalized = %finalized_root,
+            "State root validated"
+        );
+
+        Ok(finalized_root)
+    }
+
+    /// Get the state root cache
+    pub fn state_root_cache(&self) -> &XdcStateRootCache {
+        &self.state_root_cache
+    }
+
+    /// Get the reward calculator
+    pub fn reward_calculator(&self) -> &RewardCalculator {
+        &self.reward_calculator
     }
 }
 
@@ -248,11 +338,34 @@ impl<N: NodePrimitives<BlockHeader = Header>> FullConsensus<N> for XDPoSConsensu
     fn validate_block_post_execution(
         &self,
         block: &RecoveredBlock<N::Block>,
-        _result: &BlockExecutionResult<N::Receipt>,
+        result: &BlockExecutionResult<N::Receipt>,
         _receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
-        // Apply rewards at checkpoint blocks
-        self.apply_rewards(block.sealed_block())
+        let block_number = block.header().number;
+
+        // Validate gas used
+        if result.gas_used != block.header().gas_used {
+            return Err(ConsensusError::Custom(Arc::new(XDPoSError::Custom(
+                format!(
+                    "Gas used mismatch at block {}: computed {}, expected {}",
+                    block_number, result.gas_used, block.header().gas_used
+                ),
+            ))));
+        }
+
+        // Log checkpoint blocks (rewards are applied during execution, not here)
+        if should_apply_rewards(block_number, self.config.epoch) {
+            debug!(
+                block = block_number,
+                epoch = self.config.epoch,
+                "Validated checkpoint block post-execution"
+            );
+        }
+
+        // Note: State root validation with cache happens in the merkle stage
+        // The cache is accessible via self.state_root_cache() for integration there
+
+        Ok(())
     }
 }
 

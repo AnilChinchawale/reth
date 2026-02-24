@@ -77,3 +77,9 @@ std = [
     "reth-evm/std",
 ]
 optimism = []
+asm-keccak = [
+    "alloy-primitives/asm-keccak",
+]
+test-utils = [
+    "reth-evm/test-utils",
+]

@@ -83,6 +83,17 @@ impl UnifiedStatus {
         self.version = v;
     }
 
+    /// Consume this `UnifiedStatus` and produce the eth/63 [`StatusEth63`] message (no ForkID).
+    pub fn into_eth63(self) -> StatusEth63 {
+        StatusEth63 {
+            version: self.version,
+            chain: self.chain,
+            total_difficulty: self.total_difficulty.unwrap_or(U256::ZERO),
+            blockhash: self.blockhash,
+            genesis: self.genesis,
+        }
+    }
+
     /// Consume this `UnifiedStatus` and produce the legacy [`Status`] message used by all
     /// `eth/66`–`eth/68`.
     pub fn into_legacy(self) -> Status {
@@ -111,7 +122,9 @@ impl UnifiedStatus {
 
     /// Convert this `UnifiedStatus` into the appropriate `StatusMessage` variant based on version.
     pub fn into_message(self) -> StatusMessage {
-        if self.version >= EthVersion::Eth69 {
+        if self.version.is_eth63() {
+            StatusMessage::Eth63(self.into_eth63())
+        } else if self.version >= EthVersion::Eth69 {
             StatusMessage::Eth69(self.into_eth69())
         } else {
             StatusMessage::Legacy(self.into_legacy())
@@ -121,6 +134,16 @@ impl UnifiedStatus {
     /// Build a `UnifiedStatus` from a received `StatusMessage`.
     pub const fn from_message(msg: StatusMessage) -> Self {
         match msg {
+            StatusMessage::Eth63(s) => Self {
+                version: s.version,
+                chain: s.chain,
+                genesis: s.genesis,
+                forkid: ForkId { hash: alloy_hardforks::ForkHash([0, 0, 0, 0]), next: 0 }, // No ForkID in eth/63
+                blockhash: s.blockhash,
+                total_difficulty: Some(s.total_difficulty),
+                earliest_block: None,
+                latest_block: None,
+            },
             StatusMessage::Legacy(s) => Self {
                 version: s.version,
                 chain: s.chain,
@@ -378,11 +401,89 @@ impl Debug for StatusEth69 {
     }
 }
 
+/// eth/63 Status message (no ForkID, for XDC compatibility)
+#[derive(Copy, Clone, PartialEq, Eq, RlpEncodable, RlpDecodable)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+#[add_arbitrary_tests(rlp)]
+pub struct StatusEth63 {
+    /// Protocol version (63)
+    pub version: EthVersion,
+    /// Chain ID
+    pub chain: Chain,
+    /// Total difficulty
+    pub total_difficulty: U256,
+    /// Current head block hash
+    pub blockhash: B256,
+    /// Genesis block hash
+    pub genesis: B256,
+    // Note: NO ForkID field (eth/63 compatibility)
+}
+
+impl Default for StatusEth63 {
+    fn default() -> Self {
+        let mainnet_genesis = MAINNET.genesis_hash();
+        Self {
+            version: EthVersion::Eth63,
+            chain: Chain::from_named(NamedChain::Mainnet),
+            total_difficulty: U256::from(17_179_869_184u64),
+            blockhash: mainnet_genesis,
+            genesis: mainnet_genesis,
+        }
+    }
+}
+
+impl Display for StatusEth63 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let hexed_blockhash = hex::encode(self.blockhash);
+        let hexed_genesis = hex::encode(self.genesis);
+        write!(
+            f,
+            "StatusEth63 {{ version: {}, chain: {}, total_difficulty: {}, blockhash: {}, genesis: {} }}",
+            self.version,
+            self.chain,
+            self.total_difficulty,
+            hexed_blockhash,
+            hexed_genesis,
+        )
+    }
+}
+
+impl Debug for StatusEth63 {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let hexed_blockhash = hex::encode(self.blockhash);
+        let hexed_genesis = hex::encode(self.genesis);
+        if f.alternate() {
+            write!(
+                f,
+                "StatusEth63 {{\n\tversion: {:?},\n\tchain: {:?},\n\ttotal_difficulty: {:?},\n\tblockhash: {},\n\tgenesis: {}\n}}",
+                self.version,
+                self.chain,
+                self.total_difficulty,
+                hexed_blockhash,
+                hexed_genesis,
+            )
+        } else {
+            write!(
+                f,
+                "StatusEth63 {{ version: {:?}, chain: {:?}, total_difficulty: {:?}, blockhash: {}, genesis: {} }}",
+                self.version,
+                self.chain,
+                self.total_difficulty,
+                hexed_blockhash,
+                hexed_genesis,
+            )
+        }
+    }
+}
+
 /// `StatusMessage` can store either the Legacy version (with TD), or the eth/69+/eth/70 version
 /// (omits TD, includes block range).
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StatusMessage {
+    /// eth/63 status (no ForkID, for XDC/legacy networks)
+    Eth63(StatusEth63),
     /// The legacy status (`eth/66` through `eth/68`) with `total_difficulty`.
     Legacy(Status),
     /// The new `eth/69` status with no `total_difficulty`.
@@ -393,6 +494,7 @@ impl StatusMessage {
     /// Returns the genesis hash from the status message.
     pub const fn genesis(&self) -> B256 {
         match self {
+            Self::Eth63(status_63) => status_63.genesis,
             Self::Legacy(legacy_status) => legacy_status.genesis,
             Self::Eth69(status_69) => status_69.genesis,
         }
@@ -401,6 +503,7 @@ impl StatusMessage {
     /// Returns the protocol version.
     pub const fn version(&self) -> EthVersion {
         match self {
+            Self::Eth63(status_63) => status_63.version,
             Self::Legacy(legacy_status) => legacy_status.version,
             Self::Eth69(status_69) => status_69.version,
         }
@@ -409,14 +512,17 @@ impl StatusMessage {
     /// Returns the chain identifier.
     pub const fn chain(&self) -> &Chain {
         match self {
+            Self::Eth63(status_63) => &status_63.chain,
             Self::Legacy(legacy_status) => &legacy_status.chain,
             Self::Eth69(status_69) => &status_69.chain,
         }
     }
 
-    /// Returns the fork identifier.
+    /// Returns the fork identifier (if present).
+    /// eth/63 status does NOT have a ForkID, so returns a zero ForkId for compatibility.
     pub const fn forkid(&self) -> ForkId {
         match self {
+            Self::Eth63(_) => ForkId { hash: alloy_hardforks::ForkHash([0, 0, 0, 0]), next: 0 },
             Self::Legacy(legacy_status) => legacy_status.forkid,
             Self::Eth69(status_69) => status_69.forkid,
         }
@@ -425,6 +531,7 @@ impl StatusMessage {
     /// Returns the latest block hash
     pub const fn blockhash(&self) -> B256 {
         match self {
+            Self::Eth63(status_63) => status_63.blockhash,
             Self::Legacy(legacy_status) => legacy_status.blockhash,
             Self::Eth69(status_69) => status_69.blockhash,
         }
@@ -434,6 +541,7 @@ impl StatusMessage {
 impl Encodable for StatusMessage {
     fn encode(&self, out: &mut dyn BufMut) {
         match self {
+            Self::Eth63(s) => s.encode(out),
             Self::Legacy(s) => s.encode(out),
             Self::Eth69(s) => s.encode(out),
         }
@@ -441,6 +549,7 @@ impl Encodable for StatusMessage {
 
     fn length(&self) -> usize {
         match self {
+            Self::Eth63(s) => s.length(),
             Self::Legacy(s) => s.length(),
             Self::Eth69(s) => s.length(),
         }
@@ -450,6 +559,7 @@ impl Encodable for StatusMessage {
 impl Display for StatusMessage {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::Eth63(s) => Display::fmt(s, f),
             Self::Legacy(s) => Display::fmt(s, f),
             Self::Eth69(s69) => Display::fmt(s69, f),
         }

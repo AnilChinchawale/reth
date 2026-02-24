@@ -1,48 +1,33 @@
-//! XDC Network Reth Node
-//!
-//! This is the main entry point for the XDC Network Reth node.
+#![allow(missing_docs)]
+
+#[global_allocator]
+static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
+
+#[cfg(all(feature = "jemalloc-prof", unix))]
+#[unsafe(export_name = "_rjem_malloc_conf")]
+static MALLOC_CONF: &[u8] = b"prof:true,prof_active:true,lg_prof_sample:19\0";
 
 use clap::Parser;
+use reth::cli::Cli;
+use reth_ethereum_cli::chainspec::EthereumChainSpecParser;
+use reth_xdc_node::XdcNode;
+use tracing::info;
 
-/// XDC Network Reth CLI
-#[derive(Debug, Parser)]
-#[command(name = "xdc-reth")]
-#[command(about = "XDC Network Reth - XDPoS consensus node")]
-#[command(version)]
-struct Cli {
-    /// Chain specification to use (xdc, apothem)
-    #[arg(long, value_name = "CHAIN", default_value = "xdc")]
-    chain: String,
+fn main() {
+    reth_cli_util::sigsegv_handler::install();
 
-    /// Enable validator mode (participate in consensus)
-    #[arg(long)]
-    validator: bool,
+    // Enable backtraces unless a RUST_BACKTRACE value has already been explicitly provided.
+    if std::env::var_os("RUST_BACKTRACE").is_none() {
+        unsafe { std::env::set_var("RUST_BACKTRACE", "1") };
+    }
 
-    /// Data directory
-    #[arg(long, value_name = "DIR")]
-    datadir: Option<String>,
-}
+    if let Err(err) = Cli::<EthereumChainSpecParser>::parse().run(async move |builder, _| {
+        info!(target: "reth::cli", "Launching XDC node");
+        let handle = builder.node(XdcNode::default()).launch_with_debug_capabilities().await?;
 
-fn main() -> eyre::Result<()> {
-    // Parse CLI arguments (for validation)
-    let _cli = Cli::parse();
-
-    println!("XDC Reth node - coming soon");
-    println!("The XDC node builder is under active development.");
-    println!("Core consensus (XDPoS) and node structure are implemented.");
-    println!("Integration with Reth's node builder will be completed soon.");
-
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_cli_parse() {
-        // Just verify CLI parsing doesn't panic
-        let args = vec!["xdc-reth", "--chain", "xdc"];
-        let _cli = Cli::try_parse_from(args);
+        handle.wait_for_node_exit().await
+    }) {
+        eprintln!("Error: {err:?}");
+        std::process::exit(1);
     }
 }
