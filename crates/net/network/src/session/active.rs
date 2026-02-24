@@ -190,7 +190,18 @@ impl<N: NetworkPrimitives> ActiveSession<N> {
         macro_rules! on_response {
             ($resp:ident, $item:ident) => {{
                 let RequestPair { request_id, message } = $resp;
-                if let Some(req) = self.inflight_requests.remove(&request_id) {
+                // For eth/63, request_id is always 0 (no request IDs in protocol).
+                // Use FIFO matching: find the oldest inflight request of the matching type.
+                let matched_req = if self.conn.version().is_eth63() {
+                    // Find oldest matching request (by lowest key = oldest insertion)
+                    let oldest_key = self.inflight_requests.keys()
+                        .copied()
+                        .min();
+                    oldest_key.and_then(|k| self.inflight_requests.remove(&k))
+                } else {
+                    self.inflight_requests.remove(&request_id)
+                };
+                if let Some(req) = matched_req {
                     match req.request {
                         RequestState::Waiting(PeerRequest::$item { response, .. }) => {
                             trace!(peer_id=?self.remote_peer_id, ?request_id, "received response from peer");
