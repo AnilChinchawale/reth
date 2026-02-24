@@ -34,14 +34,11 @@ use std::sync::Arc;
 use tracing::{debug, info};
 
 pub mod evm;
-pub mod executor;
 pub mod payload;
 pub mod build;
 pub mod receipt;
-pub mod network;
 
 use evm::XdcEvmConfig;
-use network::XdcNetworkBuilder;
 
 /// XDC Network node
 ///
@@ -72,7 +69,7 @@ where
         N,
         reth_node_ethereum::EthereumPoolBuilder,
         reth_node_builder::components::BasicPayloadServiceBuilder<reth_node_ethereum::EthereumPayloadBuilder>,
-        XdcNetworkBuilder,
+        reth_node_ethereum::EthereumNetworkBuilder,
         XdcExecutorBuilder,
         reth_node_ethereum::EthereumConsensusBuilder,
     >;
@@ -89,7 +86,7 @@ where
             .pool(reth_node_ethereum::EthereumPoolBuilder::default())
             .executor(XdcExecutorBuilder::default())
             .payload(reth_node_builder::components::BasicPayloadServiceBuilder::default())
-            .network(XdcNetworkBuilder::default())
+            .network(reth_node_ethereum::EthereumNetworkBuilder::default())
             .consensus(reth_node_ethereum::EthereumConsensusBuilder::default())
     }
 

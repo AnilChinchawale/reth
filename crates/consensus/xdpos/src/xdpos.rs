@@ -17,14 +17,14 @@ use crate::{
 };
 use alloc::{boxed::Box, fmt::Debug, string::String, sync::Arc, vec::Vec};
 use core::num::NonZeroUsize;
-use alloy_consensus::Header;
+use alloy_consensus::{BlockHeader, Header};
 use alloy_primitives::{Address, B256};
 use lru::LruCache;
 use parking_lot::Mutex;
 use reth_consensus::{Consensus, ConsensusError, FullConsensus, HeaderValidator, ReceiptRootBloom};
 use reth_execution_types::BlockExecutionResult;
 use reth_primitives_traits::{
-    Block, NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader,
+    Block, GotExpectedBoxed, NodePrimitives, RecoveredBlock, SealedBlock, SealedHeader,
 };
 use tracing::{debug, info, trace};
 
@@ -208,10 +208,7 @@ impl XDPoSConsensus {
         // Check if roots match (either directly or via cache)
         if finalized_root != header_root && finalized_root != computed_root {
             return Err(ConsensusError::BodyStateRootDiff(
-                GotExpectedBoxed::new(
-                    alloc::boxed::Box::new(computed_root),
-                    alloc::boxed::Box::new(header_root),
-                ),
+                GotExpectedBoxed::from((computed_root, header_root)),
             ));
         }
 

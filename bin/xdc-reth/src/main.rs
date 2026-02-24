@@ -23,7 +23,7 @@ fn main() {
 
     if let Err(err) = Cli::<EthereumChainSpecParser>::parse().run(async move |builder, _| {
         info!(target: "reth::cli", "Launching XDC node");
-        let handle = builder.node(XdcNode::default()).launch_with_debug_capabilities().await?;
+        let handle = builder.node(XdcNode::default()).launch().await?;
 
         handle.wait_for_node_exit().await
     }) {
