@@ -305,8 +305,10 @@ impl<N: NetworkPrimitives> SessionManager<N> {
 
     /// Starts a new pending session from the local node to the given remote node.
     pub fn dial_outbound(&mut self, remote_addr: SocketAddr, remote_peer_id: PeerId) {
+        tracing::info!(target: "net::session", ?remote_addr, ?remote_peer_id, "dial_outbound: checking pending outbound limit");
         // The error can be dropped because no dial will be made if it would exceed the limit
         if self.counter.ensure_pending_outbound().is_ok() {
+            tracing::info!(target: "net::session", ?remote_addr, ?remote_peer_id, "dial_outbound: initiating TCP connection");
             let session_id = self.next_id();
             let (disconnect_tx, disconnect_rx) = oneshot::channel();
             let pending_events = self.pending_sessions_tx.clone();
@@ -923,14 +925,17 @@ async fn start_pending_outbound_session<N: NetworkPrimitives>(
     fork_filter: ForkFilter,
     extra_handlers: RlpxSubProtocolHandlers,
 ) {
+    tracing::info!(target: "net::session", ?remote_addr, ?remote_peer_id, hello_protocols=?hello.protocols, "start_pending_outbound_session: connecting TCP");
     let stream = match TcpStream::connect(remote_addr).await {
         Ok(stream) => {
+            tracing::info!(target: "net::session", ?remote_addr, "TCP connected successfully");
             if let Err(err) = stream.set_nodelay(true) {
                 tracing::warn!(target: "net::session", "set nodelay failed: {:?}", err);
             }
             stream
         }
         Err(error) => {
+            tracing::error!(target: "net::session", ?remote_addr, ?error, "TCP connection failed");
             let _ = events
                 .send(PendingSessionEvent::OutgoingConnectionError {
                     remote_addr,
@@ -976,9 +981,14 @@ async fn authenticate<N: NetworkPrimitives>(
     extra_handlers: RlpxSubProtocolHandlers,
 ) {
     let local_addr = stream.local_addr().ok();
+    tracing::info!(target: "net::session", ?remote_addr, ?direction, our_hello_capabilities=?hello.protocols, "Starting ECIES handshake");
     let stream = match get_ecies_stream(stream, secret_key, direction).await {
-        Ok(stream) => stream,
+        Ok(stream) => {
+            tracing::info!(target: "net::session", ?remote_addr, "ECIES handshake succeeded");
+            stream
+        }
         Err(error) => {
+            tracing::error!(target: "net::session", ?remote_addr, ?error, "ECIES handshake failed");
             let _ = events
                 .send(PendingSessionEvent::EciesAuthError {
                     remote_addr,
@@ -1062,9 +1072,14 @@ async fn authenticate_stream<N: NetworkPrimitives>(
     extra_handlers.retain(|handler| hello.try_add_protocol(handler.protocol()).is_ok());
 
     // conduct the p2p rlpx handshake and return the rlpx authenticated stream
+    tracing::info!(target: "net::session", ?remote_addr, "Starting P2P Hello handshake");
     let (mut p2p_stream, their_hello) = match stream.handshake(hello).await {
-        Ok(stream_res) => stream_res,
+        Ok(stream_res) => {
+            tracing::info!(target: "net::session", ?remote_addr, their_caps=?stream_res.1.capabilities, "P2P Hello handshake succeeded");
+            stream_res
+        }
         Err(err) => {
+            tracing::error!(target: "net::session", ?remote_addr, ?err, "P2P Hello handshake failed");
             return PendingSessionEvent::Disconnected {
                 remote_addr,
                 session_id,
@@ -1101,9 +1116,14 @@ async fn authenticate_stream<N: NetworkPrimitives>(
     }
 
     // Ensure we negotiated mandatory eth protocol
+    tracing::info!(target: "net::session", ?remote_addr, shared_caps=?p2p_stream.shared_capabilities(), "Checking shared capabilities for eth version");
     let eth_version = match p2p_stream.shared_capabilities().eth_version() {
-        Ok(version) => version,
+        Ok(version) => {
+            tracing::info!(target: "net::session", ?remote_addr, ?version, "Negotiated eth version");
+            version
+        }
         Err(err) => {
+            tracing::error!(target: "net::session", ?remote_addr, ?err, "No shared eth capability");
             return PendingSessionEvent::Disconnected {
                 remote_addr,
                 session_id,
@@ -1115,6 +1135,7 @@ async fn authenticate_stream<N: NetworkPrimitives>(
 
     // Before trying status handshake, set up the version to negotiated shared version
     status.set_eth_version(eth_version);
+    tracing::info!(target: "net::session", ?remote_addr, ?eth_version, "Starting eth status handshake");
 
     let (conn, their_status) = if p2p_stream.shared_capabilities().len() == 1 {
         // if the shared caps are 1, we know both support the eth version

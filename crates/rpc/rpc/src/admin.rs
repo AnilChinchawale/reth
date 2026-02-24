@@ -44,7 +44,14 @@ where
 {
     /// Handler for `admin_addPeer`
     fn add_peer(&self, record: NodeRecord) -> RpcResult<bool> {
-        self.network.add_peer_with_udp(record.id, record.tcp_addr(), record.udp_addr());
+        use reth_network_types::PeerKind;
+        // Connect to the peer (this adds it to the peer set AND initiates the connection)
+        self.network.connect_peer_kind(
+            record.id, 
+            PeerKind::Static, 
+            record.tcp_addr(), 
+            Some(record.udp_addr())
+        );
         Ok(true)
     }
 

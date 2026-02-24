@@ -658,6 +658,15 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
                 HelloMessage::builder(peer_id).build()
             }
         });
+        
+        // Force eth/63 for XDC chains even if hello_message was explicitly set
+        if is_xdc_chain {
+            hello_message = HelloMessage::builder(peer_id)
+                .client_version(&hello_message.client_version)
+                .protocol(Protocol::from(EthVersion::Eth63))
+                .build();
+        }
+        
         hello_message.port = listener_addr.port();
 
         // set the status

@@ -103,6 +103,7 @@ impl<N: NetworkPrimitives> Swarm<N> {
 impl<N: NetworkPrimitives> Swarm<N> {
     /// Triggers a new outgoing connection to the given node
     pub(crate) fn dial_outbound(&mut self, remote_addr: SocketAddr, remote_id: PeerId) {
+        tracing::info!(target: "net", ?remote_addr, ?remote_id, "dial_outbound called");
         self.sessions.dial_outbound(remote_addr, remote_id)
     }
 

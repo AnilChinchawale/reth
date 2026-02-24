@@ -311,6 +311,7 @@ impl<N: NetworkPrimitives> NetworkState<N> {
 
     /// Connects a peer and its address with the given kind
     pub(crate) fn add_and_connect(&mut self, peer_id: PeerId, kind: PeerKind, addr: PeerAddr) {
+        tracing::info!(target: "net", ?peer_id, ?kind, ?addr, "add_and_connect called");
         self.peers_manager.add_and_connect_kind(peer_id, kind, addr, None)
     }
 

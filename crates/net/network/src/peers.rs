@@ -883,14 +883,16 @@ impl PeersManager {
         fork_id: Option<ForkId>,
     ) {
         let ip_addr = addr.tcp().ip();
+        tracing::info!(target: "net::peers", ?peer_id, ?kind, ?addr, ?ip_addr, "add_and_connect_kind called");
 
         // Check if the IP is in the allowed ranges (netrestrict)
         if !self.ip_filter.is_allowed(&ip_addr) {
-            trace!(target: "net", ?peer_id, ?ip_addr, "Skipping outbound connection to IP not in allowed ranges");
+            tracing::warn!(target: "net", ?peer_id, ?ip_addr, "Skipping outbound connection to IP not in allowed ranges");
             return
         }
 
         if self.ban_list.is_banned(&peer_id, &ip_addr) {
+            tracing::warn!(target: "net::peers", ?peer_id, ?ip_addr, "Peer is banned, skipping");
             return
         }
 
