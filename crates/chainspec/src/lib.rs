@@ -25,6 +25,9 @@ pub use alloy_chains::{Chain, ChainKind, NamedChain};
 /// Re-export for convenience
 pub use reth_ethereum_forks::*;
 
+/// XDC Network chain specifications
+pub mod xdc;
+
 pub use alloy_evm::EvmLimitParams;
 pub use api::EthChainSpec;
 pub use info::ChainInfo;

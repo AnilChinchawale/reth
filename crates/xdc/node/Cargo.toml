@@ -1,54 +1,53 @@
 [package]
-name = "reth-consensus-xdpos"
+name = "reth-xdc-node"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 homepage.workspace = true
 repository.workspace = true
-description = "XDC Network XDPoS consensus implementation for Reth"
+description = "XDC Network node implementation for Reth"
 
 [lints]
 workspace = true
 
 [dependencies]
-# Reth dependencies
-reth-consensus = { workspace = true }
+# Reth core dependencies
+reth-node-builder = { workspace = true }
+reth-node-api = { workspace = true }
 reth-chainspec = { workspace = true }
 reth-primitives = { workspace = true }
 reth-primitives-traits = { workspace = true }
 reth-execution-types = { workspace = true }
 reth-evm = { workspace = true }
+reth-evm-ethereum = { workspace = true }
 reth-storage-api = { workspace = true }
+reth-provider = { workspace = true }
+reth-transaction-pool = { workspace = true }
+reth-network = { workspace = true }
+reth-network-api = { workspace = true }
+reth-consensus = { workspace = true }
+reth-payload-builder = { workspace = true }
+reth-payload-primitives = { workspace = true }
+reth-basic-payload-builder = { workspace = true }
 reth-errors = { workspace = true }
-reth-network-peers = { workspace = true }
+reth-revm = { workspace = true }
+
+# XDC consensus
+reth-consensus-xdpos = { workspace = true }
 
 # Alloy dependencies
-alloy-consensus = { workspace = true }
 alloy-primitives = { workspace = true }
-alloy-rlp = { workspace = true }
+alloy-consensus = { workspace = true }
 alloy-eips = { workspace = true }
 alloy-genesis = { workspace = true }
 
+# Revm
+revm = { workspace = true }
+revm-primitives = { workspace = true }
+
 # Async/sync
 parking_lot = { workspace = true }
-tokio = { workspace = true, features = ["sync", "time"] }
-
-# Cryptography
-secp256k1 = { version = "0.28", features = ["recovery", "global-context"] }
-sha3 = "0.10"
-
-# Data structures
-lru = "0.12"
-hashbrown = "0.14"
-
-# Parallelism
-rayon = "1.8"
-
-# Serialization
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
-hex = "0.4"
 
 # Error handling
 thiserror = { workspace = true }
@@ -56,19 +55,13 @@ thiserror = { workspace = true }
 # Logging
 tracing = { workspace = true }
 
-# Time
-chrono = { workspace = true }
+# Serialization
+serde = { workspace = true }
 
 [dev-dependencies]
 reth-testing-utils = { workspace = true }
-tokio-test = "0.4"
-tempfile = "3.0"
-criterion = { version = "0.5", features = ["async_futures"] }
 
 [features]
 default = ["std"]
 std = []
-
-[[bench]]
-name = "xdpos_benches"
-harness = false
+optimism = []

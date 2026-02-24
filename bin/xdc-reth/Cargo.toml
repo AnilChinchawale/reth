@@ -1,0 +1,39 @@
+[package]
+name = "xdc-reth"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+description = "XDC Network Reth node binary"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "xdc-reth"
+path = "src/main.rs"
+
+[dependencies]
+# XDC node
+reth-xdc-node = { workspace = true }
+reth-consensus-xdpos = { workspace = true }
+
+# Reth CLI and node
+reth-cli = { workspace = true }
+reth-cli-runner = { workspace = true }
+reth-node-builder = { workspace = true }
+reth-chainspec = { workspace = true }
+reth-primitives = { workspace = true }
+
+# Core
+alloy-primitives = { workspace = true }
+tracing = { workspace = true }
+clap = { workspace = true }
+eyre = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[features]
+default = ["std"]
+std = []
