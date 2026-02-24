@@ -207,10 +207,12 @@ impl XDPoSConsensus {
 
         // Check if roots match (either directly or via cache)
         if finalized_root != header_root && finalized_root != computed_root {
-            return Err(ConsensusError::StateRootMismatch {
-                computed: computed_root,
-                expected: header_root,
-            });
+            return Err(ConsensusError::BodyStateRootDiff(
+                GotExpectedBoxed::new(
+                    alloc::boxed::Box::new(computed_root),
+                    alloc::boxed::Box::new(header_root),
+                ),
+            ));
         }
 
         trace!(
@@ -261,7 +263,7 @@ impl<B: Block<Header = Header>> Consensus<B> for XDPoSConsensus {
         &self,
         block: &SealedBlock<B>,
     ) -> Result<(), ConsensusError> {
-        let number = block.header().number;
+        let number = block.header().number();
 
         if self.is_v2_block(number) {
             // V2 validation
@@ -341,14 +343,14 @@ impl<N: NodePrimitives<BlockHeader = Header>> FullConsensus<N> for XDPoSConsensu
         result: &BlockExecutionResult<N::Receipt>,
         _receipt_root_bloom: Option<ReceiptRootBloom>,
     ) -> Result<(), ConsensusError> {
-        let block_number = block.header().number;
+        let block_number = block.header().number();
 
         // Validate gas used
-        if result.gas_used != block.header().gas_used {
+        if result.gas_used != block.header().gas_used() {
             return Err(ConsensusError::Custom(Arc::new(XDPoSError::Custom(
                 format!(
                     "Gas used mismatch at block {}: computed {}, expected {}",
-                    block_number, result.gas_used, block.header().gas_used
+                    block_number, result.gas_used, block.header().gas_used()
                 ),
             ))));
         }
