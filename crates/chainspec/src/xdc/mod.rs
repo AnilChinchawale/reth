@@ -15,7 +15,7 @@ use alloy_eips::eip1559::INITIAL_BASE_FEE;
 use alloy_genesis::Genesis;
 use alloy_primitives::{b256, Address, B256, U256};
 use reth_ethereum_forks::{
-    ChainHardforks, EthereumHardfork, ForkCondition, Hardforks,
+    ChainHardforks, EthereumHardfork, ForkCondition, Hardfork, Hardforks,
 };
 use reth_network_peers::NodeRecord;
 use reth_primitives_traits::SealedHeader;
@@ -30,7 +30,7 @@ pub const XDC_MAINNET_CHAIN_ID: u64 = 50;
 
 /// XDC Mainnet genesis hash
 pub const XDC_MAINNET_GENESIS_HASH: B256 =
-    b256!("4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1");
+    b256!("0x4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1");
 
 /// XDC Mainnet V2 consensus switch block (transition from V1 to V2)
 pub const XDC_MAINNET_V2_SWITCH: u64 = 56_857_600;
@@ -45,9 +45,9 @@ pub const XDC_MAINNET_TIP_SIGNING: u64 = 3_000_000;
 /// XDC Apothem Testnet chain ID
 pub const XDC_APOTHEM_CHAIN_ID: u64 = 51;
 
-/// XDC Apothem Testnet genesis hash
+/// XDC Apothem Testnet genesis hash (placeholder)
 pub const XDC_APOTHEM_GENESIS_HASH: B256 =
-    b256!("7d7a264c1b3f1a40e5260c7b924c6f3b3b8e9d9e8c8f8f7e6d5c4b3a2918070605"); // TODO: Set actual
+    B256::new([0x7d, 0x7a, 0x26, 0x4c, 0x1b, 0x3f, 0x1a, 0x40, 0xe5, 0x26, 0x0c, 0x7b, 0x92, 0x4c, 0x6f, 0x3b, 0x3b, 0x8e, 0x9d, 0x9e, 0x8c, 0x8f, 0x8f, 0x7e, 0x6d, 0x5c, 0x4b, 0x3a, 0x29, 0x18, 0x07, 0x00]);
 
 /// XDC Apothem V2 consensus switch block
 pub const XDC_APOTHEM_V2_SWITCH: u64 = 23_556_600;

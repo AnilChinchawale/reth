@@ -2617,6 +2617,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "criterion"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2b12d017a929603d80db1831cd3a24082f8137ce19c69e6447f54f5fc8d692f"
+dependencies = [
+ "anes",
+ "cast",
+ "ciborium",
+ "clap",
+ "criterion-plot",
+ "futures",
+ "is-terminal",
+ "itertools 0.10.5",
+ "num-traits",
+ "once_cell",
+ "oorandom",
+ "plotters",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tinytemplate",
+ "walkdir",
+]
+
+[[package]]
 name = "criterion-plot"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7737,6 +7764,7 @@ dependencies = [
  "alloy-trie",
  "auto_impl",
  "derive_more",
+ "hex",
  "reth-ethereum-forks",
  "reth-network-peers",
  "reth-primitives-traits",
@@ -7986,6 +8014,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "chrono",
+ "criterion",
  "hashbrown 0.14.5",
  "hex",
  "lru 0.12.5",
@@ -10661,6 +10690,43 @@ dependencies = [
  "serde",
  "serde_json",
  "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "reth-xdc-node"
+version = "1.11.1"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-genesis",
+ "alloy-primitives",
+ "parking_lot",
+ "reth-basic-payload-builder",
+ "reth-chainspec",
+ "reth-consensus",
+ "reth-consensus-xdpos",
+ "reth-errors",
+ "reth-evm",
+ "reth-evm-ethereum",
+ "reth-execution-types",
+ "reth-network",
+ "reth-network-api",
+ "reth-node-api",
+ "reth-node-builder",
+ "reth-payload-builder",
+ "reth-payload-primitives",
+ "reth-primitives",
+ "reth-primitives-traits",
+ "reth-provider",
+ "reth-revm",
+ "reth-storage-api",
+ "reth-testing-utils",
+ "reth-transaction-pool",
+ "revm",
+ "revm-primitives",
+ "serde",
+ "thiserror 2.0.18",
  "tracing",
 ]
 
@@ -13852,6 +13918,24 @@ checksum = "32e45ad4206f6d2479085147f02bc2ef834ac85886624a23575ae137c8aa8156"
 dependencies = [
  "libc",
  "rustix",
+]
+
+[[package]]
+name = "xdc-reth"
+version = "1.11.1"
+dependencies = [
+ "alloy-primitives",
+ "clap",
+ "eyre",
+ "reth-chainspec",
+ "reth-cli",
+ "reth-cli-runner",
+ "reth-consensus-xdpos",
+ "reth-node-builder",
+ "reth-primitives",
+ "reth-xdc-node",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
