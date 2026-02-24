@@ -29,6 +29,7 @@ mod extra_data;
 mod reward;
 mod snapshot;
 pub mod special_tx;
+mod state_root_cache;
 mod validation;
 mod v1;
 mod v2;
@@ -41,6 +42,7 @@ pub use config::{V2Config, XDPoSConfig};
 pub use errors::XDPoSError;
 pub use extra_data::{hash_without_seal, recover_signer, V1ExtraData};
 pub use snapshot::{Snapshot, Tally, Vote};
+pub use state_root_cache::{CacheStats, XdcStateRootCache};
 pub use xdpos::XDPoSConsensus;
 
 pub use v2::{
