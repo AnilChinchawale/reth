@@ -1,0 +1,52 @@
+[package]
+name = "reth-xdc-wire"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.79"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/XinFinOrg/reth-xdc"
+description = "XDC Network wire protocol implementation for Reth"
+
+[dependencies]
+# Reth dependencies
+reth-eth-wire = { workspace = true }
+reth-eth-wire-types = { workspace = true }
+reth-primitives = { workspace = true }
+reth-codecs = { workspace = true }
+
+# Alloy
+alloy-primitives = { workspace = true, features = ["rlp"] }
+alloy-rlp = { workspace = true, features = ["derive"] }
+
+# Async
+tokio = { workspace = true, features = ["sync", "macros"] }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+pin-project = { workspace = true }
+
+# Serialization
+bytes = { workspace = true }
+serde = { workspace = true, optional = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Tracing
+tracing = { workspace = true }
+
+# Utilities
+derive_more = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-util = { workspace = true, features = ["codec"] }
+proptest = { workspace = true }
+arbitrary = { workspace = true, features = ["derive"] }
+
+[features]
+default = ["serde"]
+serde = [
+    "dep:serde",
+    "alloy-primitives/serde",
+    "reth-primitives/serde",
+]
