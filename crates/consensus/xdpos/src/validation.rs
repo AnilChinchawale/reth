@@ -30,14 +30,19 @@ pub fn validate_extra_data(
 pub fn validate_difficulty(
     header: &Header,
     _config: &XDPoSConfig,
-    _is_inturn: bool,
+    is_inturn: bool,
 ) -> XDPoSResult<()> {
     // XDPoS uses difficulty to indicate turn
     // In-turn: 2, Out-of-turn: 1
-    let _expected_difficulty = if _is_inturn { 2 } else { 1 };
-
-    // TODO: Validate difficulty matches expected
-    let _difficulty = header.difficulty;
-
+    let expected_difficulty = if is_inturn { 2 } else { 1 };
+    let difficulty = header.difficulty.to::<u64>();
+    
+    if difficulty != expected_difficulty {
+        return Err(XDPoSError::InvalidDifficulty {
+            expected: expected_difficulty,
+            got: difficulty,
+        });
+    }
+    
     Ok(())
 }

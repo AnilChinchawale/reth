@@ -214,11 +214,22 @@ pub fn tipsigning_block(chain_id: u64) -> Option<u64> {
 
 /// XDC Mainnet bootnodes
 pub fn xdc_mainnet_bootnodes() -> Vec<NodeRecord> {
-    // XDC mainnet bootnodes
-    // These are maintained by the XDC Network team
+    // XDC mainnet bootnodes - collected from running XDC network nodes
     const BOOTNODES: &[&str] = &[
-        "enode://15fd2f6d3d4b7b4e7c5a0c4d6f0c7d8e5f6a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4@158.101.181.208:30301",
-        "enode://2d4e6f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a@3.16.148.126:30301",
+        // TEST Server (Helsinki)
+        "enode://cc5dc85e4035d4950439831f3d83fe3423e603a40b7c767496eae9973ec61088a9e0a268f4e64ba907636c56f662687b51068f5fb2bb3343e626626aece12ce7@95.217.56.168:30303",
+        // Public XDC bootnodes
+        "enode://687a4b7ee0f7e3ecdf9598db24113e2cead5cd795f1ebe69bfa007f7a261d13c08dd7c66a9c4995b0e1545c2ea24aace20504f3ddd4b6fbdcd553705cbd64e36@78.46.75.143:64506",
+        "enode://879752d7744fd2c88492c024591995e8d3da2353a24b4b8f599a545db436c928a528b435f5f862044a89d0f1edcaaedcec847a5d8f20df73f297382fe484c5be@13.124.58.33:9500",
+        "enode://8be95052933250e9fe76c86d33981fa82e6ba7fd684948f734ebc19479b1c0019fd5deb2e310013b401c56508a67548d58b9bc3cab6bfcdb3a6934e2670d2ec2@185.130.224.247:36384",
+        "enode://775e2a6a656ddf2904bd8c702f10007a0f2380ceedf56e4860a50104bd0b6a6d38a078fc0473789efb74a9eedb91f68bf9ffa34c1763cb3b2402f37e3b3c4538@54.169.174.107:31153",
+        "enode://0a1c1808658ebce358d457d979419ae87dfa492614d9fc64b5a0e226fba735d7477c4eb82c855850670ec56877729087bdf61a83334738abb5d6484fa72ba27c@18.142.144.199:9422",
+        // XinFin official bootnodes
+        "enode://149.102.140.32:30303",
+        "enode://5.189.144.192:30303",
+        "enode://37.60.243.5:30303",
+        "enode://89.117.49.48:30303",
+        "enode://38.102.87.174:30303",
     ];
     
     BOOTNODES

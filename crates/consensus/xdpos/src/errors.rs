@@ -47,8 +47,11 @@ pub enum XDPoSError {
     InvalidUncleHash,
 
     /// Invalid difficulty
-    #[error("invalid difficulty")]
-    InvalidDifficulty,
+    #[error("invalid difficulty: expected {expected}, got {got}")]
+    InvalidDifficulty {
+        expected: u64,
+        got: u64,
+    },
 
     /// Invalid voting chain
     #[error("invalid voting chain")]
@@ -105,6 +108,9 @@ pub enum XDPoSError {
 
     #[error("signature verification failed")]
     SignatureVerificationFailed,
+
+    #[error("invalid signature format")]
+    InvalidSignature,
 
     #[error("invalid signature format")]
     InvalidSignatureFormat,

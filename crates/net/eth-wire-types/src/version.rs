@@ -39,8 +39,8 @@ impl EthVersion {
     /// The latest known eth version
     pub const LATEST: Self = Self::Eth69;
 
-    /// All known eth versions
-    pub const ALL_VERSIONS: &'static [Self] = &[Self::Eth69, Self::Eth68, Self::Eth67, Self::Eth66];
+    /// All known eth versions (includes Eth63 for XDC compatibility)
+    pub const ALL_VERSIONS: &'static [Self] = &[Self::Eth69, Self::Eth68, Self::Eth67, Self::Eth66, Self::Eth63];
 
     /// Returns true if the version is eth/63 (legacy, no request IDs)
     pub const fn is_eth63(&self) -> bool {

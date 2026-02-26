@@ -71,7 +71,7 @@ where
         reth_node_builder::components::BasicPayloadServiceBuilder<reth_node_ethereum::EthereumPayloadBuilder>,
         reth_node_ethereum::EthereumNetworkBuilder,
         XdcExecutorBuilder,
-        reth_node_ethereum::EthereumConsensusBuilder,
+        XdcConsensusBuilder,
     >;
 
     type AddOns = reth_node_ethereum::EthereumAddOns<
@@ -87,7 +87,7 @@ where
             .executor(XdcExecutorBuilder::default())
             .payload(reth_node_builder::components::BasicPayloadServiceBuilder::default())
             .network(reth_node_ethereum::EthereumNetworkBuilder::default())
-            .consensus(reth_node_ethereum::EthereumConsensusBuilder::default())
+            .consensus(XdcConsensusBuilder::default())
     }
 
     fn add_ons(&self) -> Self::AddOns {
@@ -168,17 +168,32 @@ where
         Types: NodeTypes<ChainSpec: EthChainSpec + EthereumHardforks, Primitives = EthPrimitives>,
     >,
 {
-    type Consensus = Arc<reth_ethereum_consensus::EthBeaconConsensus<<N::Types as NodeTypes>::ChainSpec>>;
+    type Consensus = Arc<dyn reth_consensus::FullConsensus<<N::Types as NodeTypes>::Primitives>>;
 
     async fn build_consensus(self, ctx: &BuilderContext<N>) -> eyre::Result<Self::Consensus> {
+        use reth_chainspec::xdc::is_xdc_chain;
+        use reth_consensus_xdpos::{XDPoSConsensus, XDPoSConfig};
+        
+        let chain_id = ctx.chain_spec().chain().id();
         info!(
-            chain_id = ctx.chain_spec().chain().id(),
-            "Building XDC consensus (using EthBeaconConsensus for now)"
+            chain_id = chain_id,
+            "Building XDC consensus"
         );
 
-        Ok(Arc::new(reth_ethereum_consensus::EthBeaconConsensus::new(
-            ctx.chain_spec(),
-        )))
+        // Check if this is an XDC chain
+        if is_xdc_chain(chain_id) {
+            // Use XDPoS consensus for XDC chains
+            let xdpos_config = XDPoSConfig::default();
+            let consensus = XDPoSConsensus::new(xdpos_config);
+            info!("Using XDPoS consensus for XDC chain");
+            Ok(consensus)
+        } else {
+            // Fall back to Ethereum consensus for non-XDC chains
+            info!("Using EthBeaconConsensus for non-XDC chain");
+            Ok(Arc::new(reth_ethereum_consensus::EthBeaconConsensus::new(
+                ctx.chain_spec(),
+            )))
+        }
     }
 }
 

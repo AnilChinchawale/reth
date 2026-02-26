@@ -77,7 +77,10 @@ pub fn validate_v1_header(
         };
 
         if header.difficulty.to::<u64>() != expected_difficulty {
-            return Err(XDPoSError::InvalidDifficulty);
+            return Err(XDPoSError::InvalidDifficulty {
+                expected: expected_difficulty,
+                got: header.difficulty.to::<u64>(),
+            });
         }
     }
 

@@ -95,7 +95,7 @@ where
             "sending eth status to peer"
         );
         let their_status =
-            EthereumEthHandshake(&mut self.inner).eth_handshake(status, fork_filter).await?;
+            EthereumEthHandshake(&mut self.inner).eth_handshake(status.into_message(), fork_filter).await?;
 
         // now we can create the `EthStream` because the peer has successfully completed
         // the handshake
