@@ -355,13 +355,17 @@ impl PeersManager {
         // we only need to check the peer id here as the ip address will have been checked at
         // on_incoming_pending_session. We also check if the peer is in the backoff list here.
         if self.ban_list.is_banned_peer(&peer_id) {
+            eprintln!("[XDC-PEERS] on_incoming_session_established: peer {:?} is BANNED in ban_list -> DisconnectBannedIncoming", peer_id);
             self.queued_actions.push_back(PeerAction::DisconnectBannedIncoming { peer_id });
             return
         }
 
         // check if the peer is trustable or not
         let mut is_trusted = self.trusted_peer_ids.contains(&peer_id);
+        eprintln!("[XDC-PEERS] on_incoming_session_established: peer={:?} addr={:?} trusted_nodes_only={} is_trusted={} trusted_peer_ids_count={}", 
+            peer_id, addr, self.trusted_nodes_only, is_trusted, self.trusted_peer_ids.len());
         if self.trusted_nodes_only && !is_trusted {
+            eprintln!("[XDC-PEERS] on_incoming_session_established: trusted_nodes_only=true AND peer {:?} NOT in trusted_peer_ids -> DisconnectUntrustedIncoming", peer_id);
             self.queued_actions.push_back(PeerAction::DisconnectUntrustedIncoming { peer_id });
             return
         }
@@ -373,6 +377,7 @@ impl PeersManager {
             Entry::Occupied(mut entry) => {
                 let peer = entry.get_mut();
                 if peer.is_banned() {
+                    eprintln!("[XDC-PEERS] on_incoming_session_established: peer {:?} has bad reputation/is_banned in peer table -> DisconnectBannedIncoming", peer_id);
                     self.queued_actions.push_back(PeerAction::DisconnectBannedIncoming { peer_id });
                     return
                 }

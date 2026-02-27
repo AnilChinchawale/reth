@@ -133,7 +133,12 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
             }
             EthMessageID::Transactions => EthMessage::Transactions(Transactions::decode(buf)?),
             EthMessageID::NewPooledTransactionHashes => {
-                if version >= EthVersion::Eth68 {
+                if version.is_eth63() {
+                    // XDC: Message 0x08 is OrderTxMsg on XDC network (TomoX DEX orders).
+                    // Skip it silently — we don't need DEX order data.
+                    eprintln!("[XDC-SKIP] Received XDC OrderTxMsg (0x08), ignoring {} bytes", buf.len());
+                    return Ok(ProtocolMessage { message_type: EthMessageID::NewBlockHashes, message: EthMessage::NewBlockHashes(NewBlockHashes(vec![])) })
+                } else if version >= EthVersion::Eth68 {
                     EthMessage::NewPooledTransactionHashes68(NewPooledTransactionHashes68::decode(
                         buf,
                     )?)
@@ -221,6 +226,12 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
             EthMessageID::GetBlockBodies => EthMessage::GetBlockBodies(Self::decode_request_pair(version, buf)?),
             EthMessageID::BlockBodies => EthMessage::BlockBodies(Self::decode_request_pair(version, buf)?),
             EthMessageID::GetPooledTransactions => {
+                if version.is_eth63() {
+                    // XDC: Message 0x09 is LendingTxMsg on XDC network (TomoX lending).
+                    // Skip it silently — we don't need lending tx data.
+                    eprintln!("[XDC-SKIP] Received XDC LendingTxMsg (0x09), ignoring {} bytes", buf.len());
+                    return Ok(ProtocolMessage { message_type: EthMessageID::NewBlockHashes, message: EthMessage::NewBlockHashes(NewBlockHashes(vec![])) })
+                }
                 EthMessage::GetPooledTransactions(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::PooledTransactions => {

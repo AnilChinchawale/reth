@@ -134,6 +134,11 @@ where
             return Err(EthStreamError::MessageTooBig(bytes.len()));
         }
 
+        // Debug: log raw bytes being received
+        let first_byte = bytes.first().copied().unwrap_or(0);
+        eprintln!("[XDC-DECODE] Received msg: first_byte=0x{:02x} len={} version={:?} first_bytes={:02x?}",
+            first_byte, bytes.len(), self.version, &bytes[..bytes.len().min(32)]);
+
         let msg = match ProtocolMessage::decode_message(self.version, &mut bytes.as_ref()) {
             Ok(m) => m,
             Err(err) => {
@@ -151,6 +156,8 @@ where
             }
         };
 
+        eprintln!("[XDC-DECODE] Decoded msg_type={:?} successfully", msg.message_type);
+
         if matches!(msg.message, EthMessage::Status(_)) {
             return Err(EthStreamError::EthHandshakeError(EthHandshakeError::StatusNotInHandshake));
         }
@@ -166,11 +173,16 @@ where
             return Err(EthStreamError::EthHandshakeError(EthHandshakeError::StatusNotInHandshake));
         }
 
+        let msg_id = item.message_id();
         let protocol_msg = ProtocolMessage::from(item);
         
         // Use version-aware encoding for eth/63 compatibility
         let mut out = Vec::new();
         protocol_msg.encode_with_version(self.version, &mut out);
+        
+        // Debug: log exact bytes being sent
+        eprintln!("[XDC-ENCODE] Sending msg_id={:?} version={:?} bytes={} first_bytes={:02x?}",
+            msg_id, self.version, out.len(), &out[..out.len().min(32)]);
         
         Ok(Bytes::from(out))
     }

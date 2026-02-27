@@ -750,12 +750,14 @@ impl<N: NetworkPrimitives> Future for ActiveSession<N> {
                         if this.is_disconnecting() {
                             break
                         }
+                        eprintln!("[XDC-ACTIVE] poll_next_unpin -> Poll::Ready(None) for peer {:?} - TCP stream closed by remote (no P2P disconnect message sent)", this.remote_peer_id);
                         debug!(target: "net::session", remote_peer_id=?this.remote_peer_id, "eth stream completed");
                         return this.emit_disconnect(cx)
                     }
                     Poll::Ready(Some(res)) => {
                         match res {
                             Ok(msg) => {
+                                eprintln!("[XDC-ACTIVE] Received OK message from peer {:?}: msg_id={:?}", this.remote_peer_id, msg.message_id());
                                 trace!(target: "net::session", msg_id=?msg.message_id(), remote_peer_id=?this.remote_peer_id, "received eth message");
                                 // decode and handle message
                                 match this.on_incoming_message(msg) {
@@ -764,6 +766,7 @@ impl<N: NetworkPrimitives> Future for ActiveSession<N> {
                                         progress = true;
                                     }
                                     OnIncomingMessageOutcome::BadMessage { error, message } => {
+                                        eprintln!("[XDC-ACTIVE] BadMessage from peer {:?}: error={}, msg={:?} -> closing session", this.remote_peer_id, error, message);
                                         debug!(target: "net::session", %error, msg=?message, remote_peer_id=?this.remote_peer_id, "received invalid protocol message");
                                         return this.close_on_error(error, cx)
                                     }
@@ -781,10 +784,11 @@ impl<N: NetworkPrimitives> Future for ActiveSession<N> {
                                     EthStreamError::InvalidMessage(MessageError::RlpError(_))
                                 );
                                 if is_rlp_error {
-                                    eprintln!("[XDC-SKIP] Skipping undecodable message (likely XDC format): {}", err);
+                                    eprintln!("[XDC-SKIP] Skipping undecodable message (likely XDC format) from peer {:?}: {}", this.remote_peer_id, err);
                                     progress = true;
                                     continue 'receive;
                                 }
+                                eprintln!("[XDC-ACTIVE] poll_next_unpin -> Poll::Ready(Some(Err)) for peer {:?}: error={} (type: {:?}) -> closing session", this.remote_peer_id, err, std::mem::discriminant(&err));
                                 debug!(target: "net::session", %err, remote_peer_id=?this.remote_peer_id, "failed to receive message");
                                 return this.close_on_error(err, cx)
                             }

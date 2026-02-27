@@ -182,9 +182,17 @@ impl<St> RlpxProtocolMultiplexer<St> {
                                 let _ = to_primary.send(msg);
                             } else {
                                 // delegate to satellite
-                                self.inner.delegate_message(&cap, msg);
+                                eprintln!("[XDC-MUX-HANDSHAKE] During eth handshake, received msg for satellite protocol '{}/{}' offset={} ({} bytes) - delegating to handler",
+                                    cap.name(), cap.version(), offset, msg.len());
+                                let delegated = self.inner.delegate_message(&cap, msg);
+                                if !delegated {
+                                    eprintln!("[XDC-MUX-HANDSHAKE] No handler for '{}/{}' during handshake - msg DROPPED. GP5 likely expects xdpos handshake response!",
+                                        cap.name(), cap.version());
+                                }
                             }
                         } else {
+                           eprintln!("[XDC-MUX-HANDSHAKE] UNKNOWN offset={} during handshake - UnknownReservedMessageId error! shared_caps={:?}",
+                               offset, self.shared_capabilities().iter_caps().map(|c| format!("{}/{}",c.name(),c.version())).collect::<Vec<_>>());
                            return Err(P2PStreamError::UnknownReservedMessageId(offset).into())
                         }
                 }
@@ -610,14 +618,20 @@ where
                                 let _ = this.primary.to_primary.send(msg);
                             } else {
                                 // delegate to installed satellite if any
-                                for proto in &this.inner.protocols {
-                                    if proto.shared_cap == *cap {
-                                        proto.send_raw(msg);
-                                        break
+                                let found_proto = this.inner.protocols.iter().position(|p| p.shared_cap == *cap);
+                                match found_proto {
+                                    Some(idx) => {
+                                        this.inner.protocols[idx].send_raw(msg);
+                                    }
+                                    None => {
+                                        eprintln!("[XDC-MUX] Received message for satellite protocol '{}/{}' offset={} but NO handler installed - msg DROPPED ({} bytes). GP5 sent a sub-protocol message with no handler registered! First byte: 0x{:02x}",
+                                            cap.name(), cap.version(), offset, msg.len(), msg.first().copied().unwrap_or(0));
                                     }
                                 }
                             }
                         } else {
+                            eprintln!("[XDC-MUX] UNKNOWN capability offset={} - returning UnknownReservedMessageId error! shared_caps={:?}",
+                                offset, this.inner.conn.shared_capabilities().iter_caps().map(|c| format!("{}/{}",c.name(),c.version())).collect::<Vec<_>>());
                             return Poll::Ready(Some(Err(P2PStreamError::UnknownReservedMessageId(
                                 offset,
                             )
