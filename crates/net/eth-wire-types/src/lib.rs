@@ -39,6 +39,7 @@ pub mod receipts;
 pub use receipts::*;
 
 pub mod block_access_lists;
+pub mod xdc_hash_cache;
 pub use block_access_lists::*;
 
 pub mod disconnect_reason;
@@ -52,9 +53,6 @@ pub use primitives::*;
 
 pub mod snap;
 pub mod xdc_header;
-
-/// XDC block hash cache for 18-field hash pre-computation.
-pub mod xdc_hash_cache;
 pub use snap::*;
 
 /// re-export for convenience

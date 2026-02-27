@@ -4,7 +4,7 @@
 //! When decoding XDC headers, we compute the correct 18-field hash and store it here.
 //! Later, when sealing headers (computing hash), we check this cache first.
 
-use alloy_primitives::{B256, U256};
+use alloy_primitives::B256;
 use std::collections::HashMap;
 use std::sync::Mutex;
 

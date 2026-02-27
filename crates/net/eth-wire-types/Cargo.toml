@@ -28,6 +28,7 @@ alloy-consensus.workspace = true
 
 bytes.workspace = true
 derive_more.workspace = true
+lazy_static = "1.4"
 serde = { workspace = true, optional = true }
 thiserror.workspace = true
 
