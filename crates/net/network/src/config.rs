@@ -13,7 +13,7 @@ use reth_discv5::NetworkStackId;
 use reth_dns_discovery::DnsDiscoveryConfig;
 use reth_eth_wire::{
     handshake::{EthHandshake, EthRlpxHandshake},
-    protocol::Protocol, EthNetworkPrimitives, EthVersion, HelloMessage, HelloMessageWithProtocols,
+    protocol::Protocol, Capability, EthNetworkPrimitives, EthVersion, HelloMessage, HelloMessageWithProtocols,
     NetworkPrimitives, UnifiedStatus,
 };
 use reth_ethereum_forks::{ForkFilter, Head};
@@ -649,33 +649,54 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
 
         let mut hello_message = hello_message.unwrap_or_else(|| {
             if is_xdc_chain {
-                // For XDC chains, only advertise eth/63 capability
-                HelloMessage::builder(peer_id)
-                    .protocol(Protocol::from(EthVersion::Eth63))
+                // For XDC chains, advertise all XDC capabilities:
+                // - xdpos/100 (XDPoS2 consensus, highest priority)
+                // - eth/68 (latest, for Erigon compatibility)
+                // - eth/66 (modern with request IDs)
+                // - eth/63 (legacy, widest compatibility)
+                HelloMessageWithProtocols::builder(peer_id)
+                    .protocols(vec![
+                        Protocol::new(Capability::new_static("xdpos", 100), 22),
+                        Protocol::new(Capability::new_static("eth", 68), 17),
+                        Protocol::new(Capability::new_static("eth", 66), 17),
+                        Protocol::new(Capability::new_static("eth", 63), 17),
+                    ])
                     .build()
             } else {
                 // Default for Ethereum: advertise all versions
-                HelloMessage::builder(peer_id).build()
+                HelloMessageWithProtocols::builder(peer_id).build()
             }
         });
         
-        // Force eth/63 for XDC chains even if hello_message was explicitly set
+        // Force XDC capabilities even if hello_message was explicitly set
+        println!("[XDC-DEBUG] chain_id={}, is_xdc_chain={}", chain_id, is_xdc_chain);
         if is_xdc_chain {
-            hello_message = HelloMessage::builder(peer_id)
+            println!("[XDC-DEBUG] XDC CHAIN DETECTED! Forcing xdpos/100, eth/68, eth/66, eth/63");
+            let old_caps = format!("{:?}", hello_message.protocols);
+            let xdc_hello = HelloMessageWithProtocols::builder(peer_id)
                 .client_version(&hello_message.client_version)
-                .protocol(Protocol::from(EthVersion::Eth63))
+                .protocols(vec![
+                    Protocol::new(Capability::new_static("xdpos", 100), 22),
+                    Protocol::new(Capability::new_static("eth", 68), 17),
+                    Protocol::new(Capability::new_static("eth", 66), 17),
+                    Protocol::new(Capability::new_static("eth", 63), 17),
+                ])
                 .build();
+            println!("[XDC-DEBUG] Old caps: {}", old_caps);
+            println!("[XDC-DEBUG] New caps: {:?}", xdc_hello.protocols);
+            hello_message = xdc_hello;
         }
+        println!("[XDC-DEBUG] Final protocols: {:?}", hello_message.protocols);
         
         hello_message.port = listener_addr.port();
 
         // set the status
         let mut status = UnifiedStatus::spec_builder(&chain_spec, &head);
         
-        // For XDC chains, use eth/63 (no ForkID)
-        if is_xdc_chain {
-            status.set_eth_version(EthVersion::Eth63);
-        }
+        // Note: Don't force eth/63 version here. The handshake handler will
+        // use XDC handshake (no ForkID) for eth/63 peers and standard handshake
+        // (with ForkID) for eth/66+ peers (like Erigon). The version is set
+        // based on negotiated capability during each connection.
 
         if let Some(id) = network_id {
             status.chain = id.into();

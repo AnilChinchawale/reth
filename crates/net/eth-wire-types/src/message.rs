@@ -147,19 +147,36 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
             EthMessageID::BlockHeaders => {
                 if version.is_eth63() {
                     // XDC eth/63: headers have 18 fields (3 extra XDPoS fields after nonce).
-                    // Decode using XDC-aware decoder that strips the extra fields.
+                    // First decode using XDC-aware decoder, then convert to N::BlockHeader.
+                    eprintln!("[XDC-DECODE] About to decode XDC headers in message.rs");
+                    
+                    // Decode XDC headers (18 fields) and strip to standard Ethereum headers (15 fields)
                     let std_headers = crate::xdc_header::decode_xdc_block_headers(buf)?;
-                    let mut eth_headers = Vec::with_capacity(std_headers.len());
-                    for h in std_headers {
-                        // Re-encode as standard Ethereum header RLP, then decode as N::BlockHeader
-                        let mut re_encoded = Vec::new();
-                        Encodable::encode(&h, &mut re_encoded);
-                        let nh = N::BlockHeader::decode(&mut &re_encoded[..])?;
-                        eth_headers.push(nh);
-                    }
+                    eprintln!("[XDC-DECODE] Decoded {} standard headers from XDC format", std_headers.len());
+                    
+                    // Convert standard headers to N::BlockHeader.
+                    // For XDC networks, N::BlockHeader is XdcBlockHeader, which now implements
+                    // From<alloy_consensus::Header> to add empty XDC-specific fields.
+                    let headers: Vec<N::BlockHeader> = std_headers.into_iter()
+                        .enumerate()
+                        .map(|(idx, h)| {
+                            eprintln!("[XDC-DECODE] Converting header #{} (block {})", idx, h.number);
+                            // Encode as standard Ethereum header, decode as N::BlockHeader
+                            let mut buf = Vec::new();
+                            Encodable::encode(&h, &mut buf);
+                            N::BlockHeader::decode(&mut &buf[..])
+                                .map_err(|e| {
+                                    eprintln!("[XDC-DECODE] ERROR decoding header #{}: {:?}", idx, e);
+                                    e
+                                })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    
+                    eprintln!("[XDC-DECODE] Successfully converted {} headers to network format", headers.len());
+                    
                     EthMessage::BlockHeaders(RequestPair {
                         request_id: 0,
-                        message: BlockHeaders(eth_headers),
+                        message: BlockHeaders(headers),
                     })
                 } else {
                     EthMessage::BlockHeaders(Self::decode_request_pair(version, buf)?)

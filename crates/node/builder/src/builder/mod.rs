@@ -977,6 +977,7 @@ impl<Node: FullNodeTypes<Types: NodeTypes<ChainSpec: Hardforks>>> BuilderContext
     {
         let secret_key = self.network_secret(&self.config().datadir())?;
         let default_peers_path = self.config().datadir().known_peers();
+        println!("[BUILDER] Creating network config, chain_id={}", self.config().chain.chain().id());
         let builder = self
             .config()
             .network

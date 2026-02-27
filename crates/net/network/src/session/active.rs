@@ -193,11 +193,16 @@ impl<N: NetworkPrimitives> ActiveSession<N> {
                 // For eth/63, request_id is always 0 (no request IDs in protocol).
                 // Use FIFO matching: find the oldest inflight request of the matching type.
                 let matched_req = if self.conn.version().is_eth63() {
-                    // Find oldest matching request (by lowest key = oldest insertion)
-                    let oldest_key = self.inflight_requests.keys()
-                        .copied()
+                    // Find oldest request key that matches this response type
+                    let oldest_matching_key = self.inflight_requests
+                        .iter()
+                        .filter(|(_, req)| {
+                            // Check if this request matches the response type
+                            matches!(req.request, RequestState::Waiting(PeerRequest::$item { .. }))
+                        })
+                        .map(|(k, _)| *k)
                         .min();
-                    oldest_key.and_then(|k| self.inflight_requests.remove(&k))
+                    oldest_matching_key.and_then(|k| self.inflight_requests.remove(&k))
                 } else {
                     self.inflight_requests.remove(&request_id)
                 };

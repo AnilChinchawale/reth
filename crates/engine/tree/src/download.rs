@@ -143,6 +143,7 @@ where
     /// Returns `true` if the request was started, `false` if there's already a request for the
     /// given hash.
     fn download_full_block(&mut self, hash: B256) -> bool {
+        eprintln!("[XDC-DOWNLOAD] download_full_block called for hash={:?}", hash);
         if self.is_inflight_request(hash) {
             return false
         }

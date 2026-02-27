@@ -33,6 +33,8 @@ reth-provider = { workspace = true }
 reth-transaction-pool = { workspace = true }
 reth-network = { workspace = true }
 reth-network-api = { workspace = true }
+reth-eth-wire = { workspace = true }
+reth-eth-wire-types = { workspace = true }
 reth-consensus = { workspace = true }
 reth-payload-builder = { workspace = true }
 reth-payload-primitives = { workspace = true }
@@ -50,6 +52,8 @@ alloy-eips = { workspace = true }
 alloy-genesis = { workspace = true }
 alloy-evm = { workspace = true }
 alloy-rpc-types-engine = { workspace = true }
+alloy-rpc-types = { workspace = true }
+reth-engine-local = { workspace = true }
 
 # Revm
 revm = { workspace = true }

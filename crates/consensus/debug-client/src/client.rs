@@ -114,6 +114,8 @@ where
             );
             let (safe_block_hash, finalized_block_hash) =
                 tokio::join!(safe_block_hash, finalized_block_hash);
+            // XDC: Use B256::ZERO for safe/finalized when historical blocks unavailable
+            // (Erigon only serves the latest block, not historical via eth_getBlockByNumber)
             let (safe_block_hash, finalized_block_hash) = match (
                 safe_block_hash,
                 finalized_block_hash,
@@ -122,8 +124,12 @@ where
                     (safe_block_hash, finalized_block_hash)
                 }
                 (safe_block_hash, finalized_block_hash) => {
-                    warn!(target: "consensus::debug-client", ?safe_block_hash, ?finalized_block_hash, "failed to fetch safe or finalized hash from etherscan");
-                    continue;
+                    // Instead of skipping, use zero hashes (optimistic sync mode)
+                    // This is safe for pre-merge chains like XDC where finality is XDPoS-based
+                    let safe = safe_block_hash.unwrap_or(B256::ZERO);
+                    let finalized = finalized_block_hash.unwrap_or(B256::ZERO);
+                    warn!(target: "consensus::debug-client", "using zero hashes for safe/finalized (XDC optimistic sync)");
+                    (safe, finalized)
                 }
             };
             let state = alloy_rpc_types_engine::ForkchoiceState {

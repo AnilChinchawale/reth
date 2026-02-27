@@ -26,7 +26,7 @@ use reth_network::PeersInfo;
 use reth_node_builder::{
     components::{ComponentsBuilder, ConsensusBuilder, ExecutorBuilder, NetworkBuilder as RethNetworkBuilder, PoolBuilder},
     node::{FullNodeTypes as FullNodeTypesT, Node, NodeTypes},
-    BuilderContext,
+    BuilderContext, DebugNode,
 };
 use reth_payload_primitives::PayloadTypes;
 use reth_provider::EthStorage;
@@ -34,6 +34,7 @@ use std::sync::Arc;
 use tracing::{debug, info};
 
 pub mod evm;
+pub mod network;
 pub mod payload;
 pub mod build;
 pub mod receipt;
@@ -69,7 +70,7 @@ where
         N,
         reth_node_ethereum::EthereumPoolBuilder,
         reth_node_builder::components::BasicPayloadServiceBuilder<reth_node_ethereum::EthereumPayloadBuilder>,
-        reth_node_ethereum::EthereumNetworkBuilder,
+        crate::network::XdcNetworkBuilder,
         XdcExecutorBuilder,
         XdcConsensusBuilder,
     >;
@@ -81,17 +82,35 @@ where
     >;
 
     fn components_builder(&self) -> Self::ComponentsBuilder {
+        eprintln!("[XDC-NODE] components_builder() called!");
         ComponentsBuilder::default()
             .node_types::<N>()
             .pool(reth_node_ethereum::EthereumPoolBuilder::default())
             .executor(XdcExecutorBuilder::default())
             .payload(reth_node_builder::components::BasicPayloadServiceBuilder::default())
-            .network(reth_node_ethereum::EthereumNetworkBuilder::default())
+            .network(crate::network::XdcNetworkBuilder::default())
             .consensus(XdcConsensusBuilder::default())
     }
 
     fn add_ons(&self) -> Self::AddOns {
         reth_node_ethereum::EthereumAddOns::default()
+    }
+}
+
+/// Implement DebugNode to enable --debug.rpc-consensus-url support
+impl<N: reth_node_api::FullNodeComponents<Types = Self>> DebugNode<N> for XdcNode {
+    type RpcBlock = alloy_rpc_types::Block;
+
+    fn rpc_to_primitive_block(rpc_block: Self::RpcBlock) -> reth_ethereum_primitives::Block {
+        rpc_block.into_consensus().convert_transactions()
+    }
+
+    fn local_payload_attributes_builder(
+        chain_spec: &Self::ChainSpec,
+    ) -> impl reth_payload_primitives::PayloadAttributesBuilder<
+        <Self::Payload as reth_payload_primitives::PayloadTypes>::PayloadAttributes,
+    > {
+        reth_engine_local::LocalPayloadAttributesBuilder::new(Arc::new(chain_spec.clone()))
     }
 }
 

@@ -65,6 +65,7 @@ impl<N: NetworkPrimitives> HeadersClient for FetchClient<N> {
         request: HeadersRequest,
         priority: Priority,
     ) -> Self::Output {
+        eprintln!("[XDC-FETCH] GetBlockHeaders request sent: {:?}", request);
         let (response, rx) = oneshot::channel();
         if self
             .request_tx

@@ -2,6 +2,11 @@
 //!
 //! XDC block headers have 3 extra fields after nonce: validators, validator, penalties.
 //! This module decodes them and converts to standard Ethereum headers.
+//!
+//! NOTE: This module is NOT used in the main BlockHeaders message decode path.
+//! Instead, message.rs decodes headers directly as N::BlockHeader (XdcBlockHeader)
+//! which preserves all 18 fields. This module can be used for cases where you
+//! need to strip XDC fields and get standard alloy::consensus::Header structs.
 
 use alloy_consensus::Header;
 use alloy_primitives::{Address, Bloom, Bytes, B256, B64, U256};
@@ -12,6 +17,7 @@ use alloy_rlp::Decodable;
 /// XDC headers have 18 required fields (15 standard + 3 XDPoS) plus optional post-EIP-1559 fields.
 /// This function decodes the full XDC format and strips the 3 extra fields.
 pub fn decode_xdc_block_headers(buf: &mut &[u8]) -> alloy_rlp::Result<Vec<Header>> {
+    eprintln!("[XDC-DECODE] === START decode, buf len={}", buf.len());
     // Decode outer list (list of headers)
     let list_header = alloy_rlp::Header::decode(buf)?;
     if !list_header.list {
@@ -22,7 +28,19 @@ pub fn decode_xdc_block_headers(buf: &mut &[u8]) -> alloy_rlp::Result<Vec<Header
     let mut headers = Vec::new();
 
     while started_len - buf.len() < list_header.payload_length {
-        headers.push(decode_single_xdc_header(buf)?);
+        {
+            let before = buf.len();
+            match decode_single_xdc_header(buf) {
+                Ok(h) => {
+                    eprintln!("[XDC-DECODE] Decoded header #{}, consumed {} bytes", headers.len(), before - buf.len());
+                    headers.push(h);
+                }
+                Err(e) => {
+                    eprintln!("[XDC-DECODE] FAILED to decode header: {:?}", e);
+                    return Err(e);
+                }
+            }
+        }
     }
 
     Ok(headers)

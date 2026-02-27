@@ -9,13 +9,14 @@
 //! 3. **Custom Bootnodes**: XDC mainnet (chain 50) and Apothem testnet (chain 51)
 //! 4. **Network IDs**: 50 (mainnet), 51 (Apothem testnet)
 
-use reth_chainspec::EthereumHardforks;
+use reth_chainspec::{EthereumHardforks, EthChainSpec};
 use reth_ethereum_forks::ForkFilter;
-use reth_eth_wire::EthVersion;
+use reth_eth_wire::{EthVersion, Capability};
+use reth_eth_wire::protocol::Protocol;
 use reth_eth_wire_types::StatusMessage;
-use reth_network::{NetworkConfig, NetworkHandle};
+use reth_network::{NetworkConfig, NetworkHandle, HelloMessageWithProtocols, NetworkConfigBuilder, NetworkManager};
 use reth_network::primitives::BasicNetworkPrimitives;
-use reth_node_api::{FullNodeTypes, NodePrimitives, TxTy};
+use reth_node_api::{FullNodeTypes, NodePrimitives, TxTy, NodeTypes};
 use reth_node_builder::{components::NetworkBuilder as RethNetworkBuilder, BuilderContext};
 use reth_transaction_pool::{PoolTransaction, TransactionPool};
 use tracing::{debug, info, warn};
@@ -62,7 +63,7 @@ pub struct XdcNetworkBuilder;
 
 impl<N, Pool> RethNetworkBuilder<N, Pool> for XdcNetworkBuilder
 where
-    N: FullNodeTypes<Types: reth_node_api::NodeTypes<ChainSpec: EthereumHardforks>>,
+    N: FullNodeTypes<Types: reth_node_api::NodeTypes<ChainSpec: EthereumHardforks + reth_chainspec::Hardforks>>,
     Pool: TransactionPool<
             Transaction: PoolTransaction<Consensus = TxTy<N::Types>>,
         > + Unpin
@@ -81,6 +82,9 @@ where
         pool: Pool,
     ) -> eyre::Result<Self::Network> {
         let chain_id = ctx.chain_spec().chain().id();
+        
+        // Force print to see if this function is even called
+        eprintln!("[XDC-NETWORK] build_network called with chain_id={}", chain_id);
 
         info!(
             chain_id,
@@ -89,6 +93,7 @@ where
 
         // Check if this is an XDC chain
         let is_xdc = is_xdc_chain(chain_id);
+        eprintln!("[XDC-NETWORK] is_xdc_chain({}) = {}", chain_id, is_xdc);
 
         if is_xdc {
             info!(
@@ -102,43 +107,45 @@ where
             );
         }
 
-        // Build the base network
-        let mut network_builder = ctx.network_builder().await?;
-
-        // Configure for XDC if needed
+        // Build the network using the standard builder with XDC capabilities
         if is_xdc {
-            // Note: Reth's NetworkConfig doesn't directly expose protocol version
-            // The actual protocol negotiation happens during RLPx handshake
-            // For now, we log the intention and will need to modify the handshake
-            // logic separately to skip ForkID validation
-
             info!(
-                "XDC network: Will use eth/63 during handshake (no ForkID validation)"
+                chain_id,
+                "XDC CHAIN DETECTED - Configuring XDC capabilities (xdpos/100, eth/68, eth/66, eth/63)"
             );
 
-            // Add XDC bootnodes
-            let bootnodes = xdc_bootnodes(chain_id);
-            if !bootnodes.is_empty() {
-                info!(
-                    bootnode_count = bootnodes.len(),
-                    "Adding XDC bootnodes"
-                );
-                // Note: Bootnodes would need to be parsed and added to network config
-                // This requires access to the NetworkConfig which is not directly
-                // exposed here. We'll need to add this in a future iteration.
-            }
+            // Get the config builder and set XDC hello message
+            let network_config_builder = ctx.network_config_builder()?;
+            let peer_id = network_config_builder.get_peer_id();
+            let xdc_hello = HelloMessageWithProtocols::builder(peer_id)
+                .protocols(vec![
+                    Protocol::new(Capability::new_static("xdpos", 100), 22),
+                    Protocol::new(Capability::new_static("eth", 68), 17),
+                    Protocol::new(Capability::new_static("eth", 66), 17),
+                    Protocol::new(Capability::new_static("eth", 63), 17),
+                ])
+                .build();
+            
+            // Build the network config with the REAL provider (not noop!)
+            let network_config = ctx.build_network_config(
+                network_config_builder.hello_message(xdc_hello)
+            );
+
+            // Build and start the network
+            let network_builder = NetworkManager::builder(network_config).await?;
+            let handle = ctx.start_network(network_builder, pool);
+
+            info!(
+                "XDC network started with capabilities: xdpos/100, eth/68, eth/66, eth/63"
+            );
+
+            Ok(handle)
+        } else {
+            // Standard Ethereum network
+            let network_builder = ctx.network_builder().await?;
+            let handle = ctx.start_network(network_builder, pool);
+            Ok(handle)
         }
-
-        // Start the network
-        let handle = ctx.start_network(network_builder, pool);
-
-        info!(
-            target: "reth::cli",
-            enode = %handle.local_enr(),
-            "XDC P2P networking initialized"
-        );
-
-        Ok(handle)
     }
 }
 

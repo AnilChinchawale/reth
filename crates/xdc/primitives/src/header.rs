@@ -397,12 +397,29 @@ impl Decodable for XdcBlockHeader {
         let mix_hash = Decodable::decode(buf)?;
         let nonce = Decodable::decode(buf)?;
         
-        // XDC-specific fields (16-18) - REQUIRED
-        let validators = Decodable::decode(buf)?;
-        let validator = Decodable::decode(buf)?;
-        let penalties = Decodable::decode(buf)?;
+        let mut consumed = started_len - buf.len();
         
-        let consumed = started_len - buf.len();
+        // XDC-specific fields (16-18) - OPTIONAL (for compatibility with standard Ethereum headers)
+        // Real XDC headers will have these, but headers decoded from P2P and re-encoded may not.
+        let validators = if consumed < rlp_head.payload_length {
+            Decodable::decode(buf)?
+        } else {
+            Bytes::new()
+        };
+        
+        let validator = if started_len - buf.len() < rlp_head.payload_length {
+            Decodable::decode(buf)?
+        } else {
+            Bytes::new()
+        };
+        
+        let penalties = if started_len - buf.len() < rlp_head.payload_length {
+            Decodable::decode(buf)?
+        } else {
+            Bytes::new()
+        };
+        
+        consumed = started_len - buf.len();
         
         // Optional fields (decode if there's more data)
         let base_fee_per_gas = if consumed < rlp_head.payload_length {
@@ -511,11 +528,49 @@ impl From<XdcBlockHeader> for alloy_consensus::Header {
             mix_hash: xdc.mix_hash,
             nonce: xdc.nonce,
             base_fee_per_gas: xdc.base_fee_per_gas,
-            withdrawals_root: xdc.withdrawals_root,
+            withdrawals_root: None, // XDC does not support withdrawals
             blob_gas_used: xdc.blob_gas_used,
             excess_blob_gas: xdc.excess_blob_gas,
             parent_beacon_block_root: xdc.parent_beacon_block_root,
             requests_hash: xdc.requests_hash,
+        }
+    }
+}
+
+/// Convert standard Ethereum Header to XdcBlockHeader (adds empty XDC-specific fields)
+/// 
+/// This is used when receiving headers over P2P that have been decoded from XDC's 18-field
+/// format but had the XDC-specific fields stripped. The validators/validator/penalties fields
+/// are set to empty because the original decoder in xdc_header.rs discards them.
+impl From<alloy_consensus::Header> for XdcBlockHeader {
+    fn from(eth: alloy_consensus::Header) -> Self {
+        Self {
+            parent_hash: eth.parent_hash,
+            ommers_hash: eth.ommers_hash,
+            beneficiary: eth.beneficiary,
+            state_root: eth.state_root,
+            transactions_root: eth.transactions_root,
+            receipts_root: eth.receipts_root,
+            logs_bloom: eth.logs_bloom,
+            difficulty: eth.difficulty,
+            number: eth.number,
+            gas_limit: eth.gas_limit,
+            gas_used: eth.gas_used,
+            timestamp: eth.timestamp,
+            extra_data: eth.extra_data,
+            mix_hash: eth.mix_hash,
+            nonce: eth.nonce,
+            // XDC-specific fields: set to empty since they were stripped during decode
+            validators: Bytes::new(),
+            validator: Bytes::new(),
+            penalties: Bytes::new(),
+            // Optional fields
+            base_fee_per_gas: eth.base_fee_per_gas,
+            blob_gas_used: eth.blob_gas_used,
+            excess_blob_gas: eth.excess_blob_gas,
+            parent_beacon_block_root: eth.parent_beacon_block_root,
+            requests_hash: eth.requests_hash,
+            target_blobs_per_block: None,
         }
     }
 }

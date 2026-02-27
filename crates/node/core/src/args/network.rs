@@ -38,6 +38,7 @@ use reth_network::{
     },
     HelloMessageWithProtocols, NetworkConfigBuilder, NetworkPrimitives,
 };
+use reth_eth_wire::{protocol::Protocol, Capability};
 use reth_network_peers::{mainnet_nodes, TrustedPeer};
 use reth_tasks::Runtime;
 use secp256k1::SecretKey;
@@ -347,6 +348,7 @@ impl NetworkArgs {
             .with_enforce_enr_fork_id(self.enforce_enr_fork_id);
 
         // Configure basic network stack
+        println!("[XDC-NET] Building network config, chain_id={}", chain_spec.chain().id());
         NetworkConfigBuilder::<N>::new(secret_key, executor)
             .external_ip_resolver(self.nat.clone())
             .sessions_config(
@@ -358,11 +360,28 @@ impl NetworkArgs {
             // Configure node identity
             .apply(|builder| {
                 let peer_id = builder.get_peer_id();
-                builder.hello_message(
-                    HelloMessageWithProtocols::builder(peer_id)
-                        .client_version(&self.identity)
-                        .build(),
-                )
+                let chain_id = chain_spec.chain().id();
+                let is_xdc = matches!(chain_id, 50 | 51);
+                
+                if is_xdc {
+                    // XDC chains need xdpos/100, eth/66, eth/63 capabilities
+                    builder.hello_message(
+                        HelloMessageWithProtocols::builder(peer_id)
+                            .client_version(&self.identity)
+                            .protocols(vec![
+                                Protocol::new(Capability::new_static("xdpos", 100), 22),
+                                Protocol::new(Capability::new_static("eth", 66), 17),
+                                Protocol::new(Capability::new_static("eth", 63), 17),
+                            ])
+                            .build(),
+                    )
+                } else {
+                    builder.hello_message(
+                        HelloMessageWithProtocols::builder(peer_id)
+                            .client_version(&self.identity)
+                            .build(),
+                    )
+                }
             })
             // apply discovery settings
             .apply(|builder| {

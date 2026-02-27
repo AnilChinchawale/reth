@@ -23,7 +23,9 @@ fn main() {
 
     if let Err(err) = Cli::<EthereumChainSpecParser>::parse().run(async move |builder, _| {
         info!(target: "reth::cli", "Launching XDC node");
-        let handle = builder.node(XdcNode::default()).launch().await?;
+        // Use launch_with_debug_capabilities to enable --debug.rpc-consensus-url
+        // which provides fake beacon/consensus signals needed for XDC sync
+        let handle = builder.node(XdcNode::default()).launch_with_debug_capabilities().await?;
 
         handle.wait_for_node_exit().await
     }) {

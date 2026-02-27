@@ -62,16 +62,21 @@ impl EthRlpxHandshake for EthHandshake {
         timeout_limit: Duration,
     ) -> Pin<Box<dyn Future<Output = Result<UnifiedStatus, EthStreamError>> + 'a + Send>> {
         Box::pin(async move {
+            info!("DEBUG: EthHandshake::handshake called");
             // Check if this is an XDC chain
             let status_msg = status.into_message();
             let is_xdc_chain = matches!(status_msg.chain().id(), 50 | 51);
+            let negotiated_version = status_msg.version();
             
-            if is_xdc_chain {
-                info!(chain_id = status_msg.chain().id(), "Using XDC handshake (no ForkID)");
+            if is_xdc_chain && matches!(negotiated_version, EthVersion::Eth63) {
+                // Only use XDC eth/63 handshake (no ForkID) for actual eth/63 peers
+                info!(chain_id = status_msg.chain().id(), "DEBUG: Using XDC eth/63 handshake (no ForkID)");
                 timeout(timeout_limit, XdcEthHandshake(unauth).xdc_handshake(status_msg))
                     .await
                     .map_err(|_| EthStreamError::StreamTimeout)?
             } else {
+                // For eth/66+ peers (including Erigon), use standard handshake WITH ForkID
+                info!(chain_id = status_msg.chain().id(), ?negotiated_version, "DEBUG: Using standard ETH handshake (with ForkID)");
                 timeout(timeout_limit, EthereumEthHandshake(unauth).eth_handshake(status_msg, fork_filter))
                     .await
                     .map_err(|_| EthStreamError::StreamTimeout)?
@@ -195,16 +200,20 @@ where
             .into());
         }
 
-        // Fork validation for non-XDC chains
-        if let Err(err) = fork_filter
-            .validate(their_status_message.forkid())
-            .map_err(EthHandshakeError::InvalidFork)
-        {
-            unauth
-                .disconnect(DisconnectReason::ProtocolBreach)
-                .await
-                .map_err(EthStreamError::from)?;
-            return Err(err.into());
+        // Skip ForkID validation for XDC chains (50=mainnet, 51=Apothem)
+        // XDC uses pre-merge consensus and has different ForkID semantics
+        let is_xdc_chain = matches!(status.chain().id(), 50 | 51);
+        if !is_xdc_chain {
+            if let Err(err) = fork_filter
+                .validate(their_status_message.forkid())
+                .map_err(EthHandshakeError::InvalidFork)
+            {
+                unauth
+                    .disconnect(DisconnectReason::ProtocolBreach)
+                    .await
+                    .map_err(EthStreamError::from)?;
+                return Err(err.into());
+            }
         }
 
         if let StatusMessage::Eth69(s) = &their_status_message {
@@ -241,7 +250,8 @@ where
     ) -> Result<UnifiedStatus, EthStreamError> {
         let unauth = self.0;
         
-        info!("Starting XDC handshake (eth/63 without ForkID)");
+        info!("DEBUG: Starting XDC handshake (eth/63 without ForkID)");
+        info!(status_debug = ?status, "DEBUG: XDC handshake status input");
 
         // For XDC, we need to send a simplified eth/63 status without ForkID
         // Convert to StatusEth63 format
@@ -269,11 +279,14 @@ where
         ))
         .into();
         
-        info!(version = ?xdc_status.version, chain = %xdc_status.chain, "Sending XDC status");
+        info!(version = ?xdc_status.version, chain = %xdc_status.chain, "DEBUG: Sending XDC status");
+        info!(status_bytes = %alloy_primitives::hex::encode(&status_msg), "DEBUG: XDC status message bytes");
         unauth.send(status_msg).await.map_err(EthStreamError::from)?;
+        info!("DEBUG: XDC status sent, waiting for response...");
 
         // Receive peer's response
         let their_msg_res = unauth.next().await;
+        info!(received = their_msg_res.is_some(), "DEBUG: Received peer response");
         let their_msg = match their_msg_res {
             Some(Ok(msg)) => msg,
             Some(Err(e)) => return Err(EthStreamError::from(e)),
