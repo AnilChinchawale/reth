@@ -188,3 +188,71 @@ mod tests {
         buf.extend_from_slice(&fields);
     }
 }
+
+/// Decode a single XDC header and return the XDC-specific fields separately.
+/// This allows callers to preserve the fields for hash computation.
+pub fn decode_single_xdc_header_with_fields(buf: &mut &[u8]) -> alloy_rlp::Result<(Header, alloy_primitives::Bytes, alloy_primitives::Bytes, alloy_primitives::Bytes)> {
+    let rlp_head = alloy_rlp::Header::decode(buf)?;
+    if !rlp_head.list {
+        return Err(alloy_rlp::Error::UnexpectedString);
+    }
+    let started_len = buf.len();
+
+    // 15 standard fields
+    let parent_hash = B256::decode(buf)?;
+    let ommers_hash = B256::decode(buf)?;
+    let beneficiary = Address::decode(buf)?;
+    let state_root = B256::decode(buf)?;
+    let transactions_root = B256::decode(buf)?;
+    let receipts_root = B256::decode(buf)?;
+    let logs_bloom = Bloom::decode(buf)?;
+    let difficulty = U256::decode(buf)?;
+    let number = u64::decode(buf)?;
+    let gas_limit = u64::decode(buf)?;
+    let gas_used = u64::decode(buf)?;
+    let timestamp = u64::decode(buf)?;
+    let extra_data = alloy_primitives::Bytes::decode(buf)?;
+    let mix_hash = B256::decode(buf)?;
+    let nonce = B64::decode(buf)?;
+
+    // 3 XDC fields (preserve them!)
+    let validators = alloy_primitives::Bytes::decode(buf)?;
+    let validator = alloy_primitives::Bytes::decode(buf)?;
+    let penalties = alloy_primitives::Bytes::decode(buf)?;
+
+    // Skip remaining optional fields
+    let consumed = started_len - buf.len();
+    if consumed < rlp_head.payload_length {
+        let remaining = rlp_head.payload_length - consumed;
+        if buf.len() < remaining {
+            return Err(alloy_rlp::Error::InputTooShort);
+        }
+        *buf = &buf[remaining..];
+    }
+
+    let header = Header {
+        parent_hash,
+        ommers_hash,
+        beneficiary,
+        state_root,
+        transactions_root,
+        receipts_root,
+        logs_bloom,
+        difficulty,
+        number,
+        gas_limit,
+        gas_used,
+        timestamp,
+        extra_data,
+        mix_hash,
+        nonce,
+        base_fee_per_gas: None,
+        withdrawals_root: None,
+        blob_gas_used: None,
+        excess_blob_gas: None,
+        parent_beacon_block_root: None,
+        requests_hash: None,
+    };
+
+    Ok((header, validators, validator, penalties))
+}

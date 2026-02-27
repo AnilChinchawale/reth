@@ -3,6 +3,7 @@
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
 use reth_primitives::{BlockBody, Header, TransactionSigned, Withdrawal};
+use reth_xdc_primitives::XdcBlockHeader;
 use std::fmt;
 
 /// XDC protocol message IDs
@@ -240,11 +241,12 @@ pub struct GetBlockHeaders63 {
 }
 
 /// BlockHeaders response (eth/63 - no request ID)
+/// Uses XdcBlockHeader (18 fields) to preserve validators/validator/penalties for correct hash.
 #[derive(Clone, Debug, PartialEq, Eq, RlpEncodable, RlpDecodable)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlockHeaders63 {
-    /// Block headers
-    pub headers: Vec<Header>,
+    /// Block headers with XDC-specific fields
+    pub headers: Vec<XdcBlockHeader>,
 }
 
 /// GetBlockBodies request (eth/63 - no request ID)

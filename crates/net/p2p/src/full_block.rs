@@ -199,9 +199,12 @@ where
                             let (peer, maybe_header) =
                                 maybe_header.map(|h| h.map(SealedHeader::seal_slow)).split();
                             if let Some(header) = maybe_header {
+                                eprintln!("[XDC-FULLBLOCK] Header received: computed_hash={:?} expected_hash={:?} block_num={}", header.hash(), this.hash, header.number());
                                 if header.hash() == this.hash {
+                                    eprintln!("[XDC-FULLBLOCK] ✅ Header hash MATCHES! Requesting body...");
                                     this.header = Some(header);
                                 } else {
+                                    eprintln!("[XDC-FULLBLOCK] ❌ Header hash MISMATCH! expected={:?} got={:?}", this.hash, header.hash());
                                     debug!(target: "downloaders", expected=?this.hash, received=?header.hash(), "Received wrong header");
                                     // received a different header than requested
                                     this.client.report_bad_message(peer)

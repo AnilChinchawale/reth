@@ -13,6 +13,7 @@ reth-eth-wire = { workspace = true }
 reth-eth-wire-types = { workspace = true }
 reth-primitives = { workspace = true }
 reth-codecs = { workspace = true }
+reth-xdc-primitives = { path = "../../xdc/primitives" }
 
 # Alloy
 alloy-primitives = { workspace = true, features = ["rlp"] }

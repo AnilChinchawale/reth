@@ -165,6 +165,7 @@ impl<N: NetworkPrimitives> ActiveSession<N> {
     ///
     /// Returns an error if the message is considered to be in violation of the protocol.
     fn on_incoming_message(&mut self, msg: EthMessage<N>) -> OnIncomingMessageOutcome<N> {
+        eprintln!("[XDC-ACTIVE] on_incoming_message called, msg_type={}", std::any::type_name::<EthMessage<N>>());
         /// A macro that handles an incoming request
         /// This creates a new channel and tries to send the sender half to the session while
         /// storing the receiver half internally so the pending response can be polled.
@@ -194,14 +195,17 @@ impl<N: NetworkPrimitives> ActiveSession<N> {
                 // Use FIFO matching: find the oldest inflight request of the matching type.
                 let matched_req = if self.conn.version().is_eth63() {
                     // Find oldest request key that matches this response type
+                    eprintln!("[XDC-FIFO] Looking for {} match in {} inflight requests", stringify!($item), self.inflight_requests.len());
                     let oldest_matching_key = self.inflight_requests
                         .iter()
                         .filter(|(_, req)| {
-                            // Check if this request matches the response type
-                            matches!(req.request, RequestState::Waiting(PeerRequest::$item { .. }))
+                            let matches = matches!(req.request, RequestState::Waiting(PeerRequest::$item { .. }));
+                            eprintln!("[XDC-FIFO] Request key checking: matches={}", matches);
+                            matches
                         })
                         .map(|(k, _)| *k)
                         .min();
+                    eprintln!("[XDC-FIFO] Matched key: {:?}", oldest_matching_key);
                     oldest_matching_key.and_then(|k| self.inflight_requests.remove(&k))
                 } else {
                     self.inflight_requests.remove(&request_id)
@@ -259,6 +263,7 @@ impl<N: NetworkPrimitives> ActiveSession<N> {
                 on_request!(req, BlockHeaders, GetBlockHeaders)
             }
             EthMessage::BlockHeaders(resp) => {
+                eprintln!("[XDC-SESSION] Received BlockHeaders response with {} headers", resp.message.0.len());
                 on_response!(resp, GetBlockHeaders)
             }
             EthMessage::GetBlockBodies(req) => {

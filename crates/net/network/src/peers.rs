@@ -411,17 +411,15 @@ impl PeersManager {
 
     /// Bans the peer temporarily with the configured ban timeout
     fn ban_peer(&mut self, peer_id: PeerId) {
-        let ban_duration = if let Some(peer) = self.peers.get(&peer_id) &&
-            (peer.is_trusted() || peer.is_static())
-        {
-            // For misbehaving trusted or static peers, we provide a bit more leeway when
-            // penalizing them.
-            self.backoff_durations.low / 2
-        } else {
-            self.ban_duration
-        };
+        // XDC: Never ban trusted or static peers to maintain connectivity
+        if let Some(peer) = self.peers.get(&peer_id) {
+            if peer.is_trusted() || peer.is_static() {
+                eprintln!("[XDC-P2P] Skipping ban for trusted/static peer {:?}", peer_id);
+                return;
+            }
+        }
 
-        self.ban_list.ban_peer_until(peer_id, std::time::Instant::now() + ban_duration);
+        self.ban_list.ban_peer_until(peer_id, std::time::Instant::now() + self.ban_duration);
         self.queued_actions.push_back(PeerAction::BanPeer { peer_id });
     }
 
@@ -496,13 +494,16 @@ impl PeersManager {
                 let mut reputation_change = self.reputation_weights.change(rep).as_i32();
                 if peer.is_trusted() || peer.is_static() {
                     // exempt trusted and static peers from reputation slashing for
+                    // network-related issues (connection failures, timeouts, etc.)
                     if matches!(
                         rep,
                         ReputationChangeKind::Dropped |
                             ReputationChangeKind::BadAnnouncement |
                             ReputationChangeKind::Timeout |
-                            ReputationChangeKind::AlreadySeenTransaction
+                            ReputationChangeKind::AlreadySeenTransaction |
+                            ReputationChangeKind::FailedToConnect
                     ) {
+                        eprintln!("[XDC-P2P] Exempting trusted/static peer from {:?} reputation change", rep);
                         return
                     }
 
@@ -678,6 +679,11 @@ impl PeersManager {
             let mut remove_peer = false;
 
             if let Some(peer) = self.peers.get_mut(peer_id) {
+                // Check if peer already has an active incoming connection
+                // If so, this outbound connection attempt is redundant and we should not
+                // penalize the peer for the failure
+                let has_incoming_connection = peer.state.is_incoming();
+
                 if let Some(kind) = err.should_backoff() {
                     if peer.is_trusted() || peer.is_static() {
                         // provide a bit more leeway for trusted peers and use a lower backoff so
@@ -704,10 +710,15 @@ impl PeersManager {
                         // while
                         backoff_until = Some(backoff_time);
                     }
-                } else {
-                    // If the error was not a backoff error, we reduce the peer's reputation
+                } else if !has_incoming_connection {
+                    // Only reduce reputation if there's no active incoming connection
+                    // If there's already an inbound connection, this outbound failure is likely
+                    // due to the peer rejecting duplicate connections, which shouldn't penalize reputation
                     let reputation_change = self.reputation_weights.change(reputation_change);
                     peer.reputation = peer.reputation.saturating_add(reputation_change.as_i32());
+                    trace!(target: "net::peers", ?peer_id, reputation=peer.reputation, "reduced reputation for connection failure");
+                } else {
+                    trace!(target: "net::peers", ?peer_id, "skipping reputation reduction - peer has active incoming connection");
                 };
 
                 self.connection_info.decr_state(peer.state);
@@ -892,8 +903,18 @@ impl PeersManager {
         }
 
         if self.ban_list.is_banned(&peer_id, &ip_addr) {
-            tracing::warn!(target: "net::peers", ?peer_id, ?ip_addr, "Peer is banned, skipping");
-            return
+            // XDC: Allow trusted/static peers even if banned
+            let is_trusted_or_static = matches!(kind, PeerKind::Trusted | PeerKind::Static) ||
+                self.trusted_peer_ids.contains(&peer_id) ||
+                self.peers.get(&peer_id).map_or(false, |p| p.is_trusted() || p.is_static());
+            if is_trusted_or_static {
+                eprintln!("[XDC-P2P] Unbanning trusted/static peer {:?} (ip: {:?})", peer_id, ip_addr);
+                self.ban_list.unban_peer(&peer_id);
+                self.ban_list.unban_ip(&ip_addr);
+            } else {
+                tracing::warn!(target: "net::peers", ?peer_id, ?ip_addr, "Peer is banned, skipping");
+                return
+            }
         }
 
         match self.peers.entry(peer_id) {
@@ -955,6 +976,7 @@ impl PeersManager {
             !peer.is_backed_off() &&
                 !peer.is_banned() &&
                 peer.state.is_unconnected() &&
+                !peer.state.is_incoming() && // Extra safety: don't try outbound if already connected inbound
                 (!self.trusted_nodes_only || peer.is_trusted())
         });
 

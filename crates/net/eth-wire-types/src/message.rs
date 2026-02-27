@@ -147,37 +147,73 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
             EthMessageID::BlockHeaders => {
                 if version.is_eth63() {
                     // XDC eth/63: headers have 18 fields (3 extra XDPoS fields after nonce).
-                    // First decode using XDC-aware decoder, then convert to N::BlockHeader.
-                    eprintln!("[XDC-DECODE] About to decode XDC headers in message.rs");
+                    // Decode directly as N::BlockHeader to PRESERVE all 18 fields including
+                    // validators, validator, penalties — these are needed for correct hash computation.
+                    eprintln!("[XDC-DECODE] Decoding XDC headers with field preservation");
                     
-                    // Decode XDC headers (18 fields) and strip to standard Ethereum headers (15 fields)
-                    let std_headers = crate::xdc_header::decode_xdc_block_headers(buf)?;
-                    eprintln!("[XDC-DECODE] Decoded {} standard headers from XDC format", std_headers.len());
+                    // Decode outer list
+                    let list_header = alloy_rlp::Header::decode(buf).map_err(MessageError::RlpError)?;
+                    if !list_header.list {
+                        return Err(MessageError::RlpError(alloy_rlp::Error::UnexpectedString));
+                    }
                     
-                    // Convert standard headers to N::BlockHeader.
-                    // For XDC networks, N::BlockHeader is XdcBlockHeader, which now implements
-                    // From<alloy_consensus::Header> to add empty XDC-specific fields.
-                    let headers: Vec<N::BlockHeader> = std_headers.into_iter()
-                        .enumerate()
-                        .map(|(idx, h)| {
-                            eprintln!("[XDC-DECODE] Converting header #{} (block {})", idx, h.number);
-                            // Encode as standard Ethereum header, decode as N::BlockHeader
-                            let mut buf = Vec::new();
-                            Encodable::encode(&h, &mut buf);
-                            N::BlockHeader::decode(&mut &buf[..])
-                                .map_err(|e| {
-                                    eprintln!("[XDC-DECODE] ERROR decoding header #{}: {:?}", idx, e);
-                                    e
-                                })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let started_len = buf.len();
+                    let mut headers = Vec::new();
                     
-                    eprintln!("[XDC-DECODE] Successfully converted {} headers to network format", headers.len());
+                    while started_len - buf.len() < list_header.payload_length {
+                        // Decode XDC header preserving all 18 fields
+                        let (std_h, validators, validator, penalties) = 
+                            crate::xdc_header::decode_single_xdc_header_with_fields(buf)
+                                .map_err(MessageError::RlpError)?;
+                        
+                        eprintln!("[XDC-DECODE] Decoded block {} validators_len={} validator_len={} penalties_len={}", 
+                            std_h.number, validators.len(), validator.len(), penalties.len());
+                        
+                        // Re-encode as 18-field XDC header (with preserved XDC fields)
+                        // so XdcBlockHeader::decode can parse it and hash_slow() will be correct
+                        let mut rebuf = Vec::new();
+                        {
+                            // Build 18-field header RLP
+                            let mut fields = Vec::new();
+                            alloy_rlp::Encodable::encode(&std_h.parent_hash, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.ommers_hash, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.beneficiary, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.state_root, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.transactions_root, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.receipts_root, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.logs_bloom, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.difficulty, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.number, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.gas_limit, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.gas_used, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.timestamp, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.extra_data, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.mix_hash, &mut fields);
+                            alloy_rlp::Encodable::encode(&std_h.nonce, &mut fields);
+                            // XDC fields (preserved from original)
+                            alloy_rlp::Encodable::encode(&validators, &mut fields);
+                            alloy_rlp::Encodable::encode(&validator, &mut fields);
+                            alloy_rlp::Encodable::encode(&penalties, &mut fields);
+                            
+                            let rlp_header = alloy_rlp::Header { list: true, payload_length: fields.len() };
+                            rlp_header.encode(&mut rebuf);
+                            rebuf.extend_from_slice(&fields);
+                        }
+                        
+                        // Decode as N::BlockHeader (XdcBlockHeader) — now with all 18 fields
+                        let h = N::BlockHeader::decode(&mut &rebuf[..])
+                            .map_err(MessageError::RlpError)?;
+                        headers.push(h);
+                    }
                     
-                    EthMessage::BlockHeaders(RequestPair {
+                    eprintln!("[XDC-DECODE] Successfully decoded {} headers, returning EthMessage::BlockHeaders", headers.len());
+                    
+                    let msg = EthMessage::BlockHeaders(RequestPair {
                         request_id: 0,
                         message: BlockHeaders(headers),
-                    })
+                    });
+                    eprintln!("[XDC-DECODE] Created EthMessage::BlockHeaders successfully");
+                    msg
                 } else {
                     EthMessage::BlockHeaders(Self::decode_request_pair(version, buf)?)
                 }

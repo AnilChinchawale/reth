@@ -303,6 +303,11 @@ impl<N: NetworkPrimitives> SessionManager<N> {
         Ok(session_id)
     }
 
+    /// Check if a peer already has an active session
+    pub fn has_active_session(&self, peer_id: &PeerId) -> bool {
+        self.active_sessions.contains_key(peer_id)
+    }
+
     /// Starts a new pending session from the local node to the given remote node.
     pub fn dial_outbound(&mut self, remote_addr: SocketAddr, remote_peer_id: PeerId) {
         tracing::info!(target: "net::session", ?remote_addr, ?remote_peer_id, "dial_outbound: checking pending outbound limit");
