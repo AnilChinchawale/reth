@@ -260,6 +260,7 @@ impl<N: NetworkPrimitives> ActiveSession<N> {
                 self.try_emit_broadcast(PeerMessage::PooledTransactions(msg.into())).into()
             }
             EthMessage::GetBlockHeaders(req) => {
+                eprintln!("[XDC-ACTIVE] Peer requesting GetBlockHeaders: id={} start={:?} limit={}", req.request_id, req.message.start_block, req.message.limit);
                 on_request!(req, BlockHeaders, GetBlockHeaders)
             }
             EthMessage::BlockHeaders(resp) => {
@@ -267,6 +268,7 @@ impl<N: NetworkPrimitives> ActiveSession<N> {
                 on_response!(resp, GetBlockHeaders)
             }
             EthMessage::GetBlockBodies(req) => {
+                eprintln!("[XDC-ACTIVE] Peer requesting GetBlockBodies: id={} count={}", req.request_id, req.message.0.len());
                 on_request!(req, BlockBodies, GetBlockBodies)
             }
             EthMessage::BlockBodies(resp) => {

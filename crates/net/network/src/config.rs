@@ -701,6 +701,20 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
         if let Some(id) = network_id {
             status.chain = id.into();
         }
+        
+        // XDC chains (mainnet=50, apothem=51) need a high TD in the status message
+        // to prevent peers from dropping us as "useless" when we're at block 0.
+        // XDC peers check TD and disconnect peers with TD=0 immediately.
+        let effective_chain_id = chain_id;
+        if effective_chain_id == 50 || effective_chain_id == 51 {
+            // Use a high fake TD so XDC peers consider us useful
+            status.total_difficulty = Some(alloy_primitives::U256::from(1_000_000_000_000_000_000u128));
+            tracing::info!(
+                chain_id = effective_chain_id,
+                td = ?status.total_difficulty,
+                "XDC chain detected - using high TD to prevent peer disconnection"
+            );
+        }
 
         // set a fork filter based on the chain spec and head
         let fork_filter = chain_spec.fork_filter(head);

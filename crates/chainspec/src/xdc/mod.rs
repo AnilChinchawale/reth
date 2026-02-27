@@ -6,16 +6,14 @@
 
 use crate::{
     spec::{make_genesis_header, ChainSpec},
-    BaseFeeParams, BaseFeeParamsKind, EthChainSpec,
+    BaseFeeParams, BaseFeeParamsKind,
 };
 use alloc::{sync::Arc, vec, vec::Vec};
-use alloy_chains::{Chain, NamedChain};
-use alloy_consensus::constants::EMPTY_OMMER_ROOT_HASH;
-use alloy_eips::eip1559::INITIAL_BASE_FEE;
+use alloy_chains::Chain;
 use alloy_genesis::Genesis;
 use alloy_primitives::{b256, Address, B256, U256};
 use reth_ethereum_forks::{
-    ChainHardforks, EthereumHardfork, ForkCondition, Hardfork, Hardforks,
+    ChainHardforks, EthereumHardfork, ForkCondition, Hardfork,
 };
 use reth_network_peers::NodeRecord;
 use reth_primitives_traits::SealedHeader;
@@ -29,8 +27,9 @@ use reth_primitives_traits::sync::LazyLock;
 pub const XDC_MAINNET_CHAIN_ID: u64 = 50;
 
 /// XDC Mainnet genesis hash
+/// This is the CORRECT genesis hash for XDC Mainnet
 pub const XDC_MAINNET_GENESIS_HASH: B256 =
-    b256!("0x4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1");
+    b256!("4a9d748bd78a8d0385b67788c2435dcdb914f98a96250b68863a1f8b7642d6b1");
 
 /// XDC Mainnet V2 consensus switch block (transition from V1 to V2)
 pub const XDC_MAINNET_V2_SWITCH: u64 = 56_857_600;
@@ -63,38 +62,46 @@ pub const XDC_APOTHEM_TIP_SIGNING: u64 = 3_000_000;
 /// Note: Typo "foudation" is preserved from original XDC code for compatibility
 pub const FOUNDATION_WALLET_KEY: &str = "foudationWalletAddr";
 
-/// XDC Mainnet chain spec
-pub static XDC_MAINNET: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
-    let genesis = Genesis {
-        nonce: 0,
-        timestamp: 1546272000, // 2019-01-01 00:00:00 UTC
-        extra_data: hex::decode(
-            "0000000000000000000000000000000000000000000000000000000000000000\
-             0000000000000000000000000000000000000000000000000000000000000000"
-        ).unwrap_or_default().into(),
-        gas_limit: 50_000_000,
-        difficulty: U256::from(1),
-        mix_hash: B256::ZERO,
-        coinbase: Address::ZERO,
-        alloc: Default::default(),
-        ..Default::default()
-    };
-
-    // XDC uses a simplified hardfork structure
-    let hardforks = ChainHardforks::new(vec![
-        (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
+/// Build XDC mainnet hardforks
+/// 
+/// XDC mainnet uses specific hardfork blocks from the genesis config:
+/// - homesteadBlock: 1
+/// - eip150Block: 2  
+/// - eip155Block: 3
+/// - eip158Block: 3
+/// - byzantiumBlock: 4
+/// - London and beyond: Never (XDC uses XDPoS, not EIP-1559)
+fn xdc_mainnet_hardforks() -> ChainHardforks {
+    ChainHardforks::new(vec![
+        (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(1)),
+        (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(2)),
+        (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(3)),
+        (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(4)),
+        // XDC doesn't activate these forks - use Never
+        (EthereumHardfork::Constantinople.boxed(), ForkCondition::Never),
+        (EthereumHardfork::Petersburg.boxed(), ForkCondition::Never),
+        (EthereumHardfork::Istanbul.boxed(), ForkCondition::Never),
+        (EthereumHardfork::Berlin.boxed(), ForkCondition::Never),
         (EthereumHardfork::London.boxed(), ForkCondition::Never),
-    ]);
+    ])
+}
 
-    let mut spec = ChainSpec {
-        chain: Chain::from(50), // XDC Mainnet
+/// XDC Mainnet chain spec
+/// 
+/// Loaded from the real XDC mainnet genesis JSON which includes:
+/// - Correct timestamp: 0x5cefae27 (1559211559)
+/// - Correct gasLimit: 0x47b760 (4700000)
+/// - Full alloc with validator contract at 0x88 and other system contracts
+/// - Correct extraData with initial masternodes
+pub static XDC_MAINNET: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
+    // Load the real XDC mainnet genesis
+    let genesis: Genesis = serde_json::from_str(include_str!("../../res/genesis/xdc-mainnet.json"))
+        .expect("Can't deserialize XDC Mainnet genesis json");
+    
+    let hardforks = xdc_mainnet_hardforks();
+    
+    let spec = ChainSpec {
+        chain: Chain::from(XDC_MAINNET_CHAIN_ID),
         genesis_header: SealedHeader::new(
             make_genesis_header(&genesis, &hardforks),
             XDC_MAINNET_GENESIS_HASH,
@@ -137,8 +144,8 @@ pub static XDC_APOTHEM: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
         (EthereumHardfork::London.boxed(), ForkCondition::Never),
     ]);
 
-    let mut spec = ChainSpec {
-        chain: Chain::from(51), // XDC Apothem Testnet
+    let spec = ChainSpec {
+        chain: Chain::from(XDC_APOTHEM_CHAIN_ID),
         genesis_header: SealedHeader::new(
             make_genesis_header(&genesis, &hardforks),
             XDC_APOTHEM_GENESIS_HASH,
@@ -312,5 +319,36 @@ mod tests {
     fn test_foundation_wallet_key() {
         // Verify the typo is preserved for compatibility
         assert_eq!(FOUNDATION_WALLET_KEY, "foudationWalletAddr");
+    }
+
+    #[test]
+    fn test_xdc_mainnet_spec() {
+        // Verify the XDC mainnet spec loads correctly
+        let spec = &*XDC_MAINNET;
+        
+        // Check chain ID
+        assert_eq!(spec.chain.id(), XDC_MAINNET_CHAIN_ID);
+        
+        // Check genesis values
+        assert_eq!(spec.genesis.timestamp, 0x5cefae27); // 1559211559
+        assert_eq!(spec.genesis.gas_limit, 0x47b760); // 4700000
+        assert_eq!(spec.genesis.difficulty, U256::from(1));
+        
+        // Check alloc has entries (should have 8)
+        assert!(!spec.genesis.alloc.is_empty());
+        
+        // Verify 0x88 contract exists (validator contract)
+        let validator_addr = "0x0000000000000000000000000000000000000088".parse().unwrap();
+        assert!(spec.genesis.alloc.contains_key(&validator_addr));
+        
+        // Check hardforks
+        assert!(spec.hardforks.fork(EthereumHardfork::Homestead).active_at_block(1));
+        assert!(!spec.hardforks.fork(EthereumHardfork::Homestead).active_at_block(0));
+        assert!(spec.hardforks.fork(EthereumHardfork::Tangerine).active_at_block(2));
+        assert!(spec.hardforks.fork(EthereumHardfork::SpuriousDragon).active_at_block(3));
+        assert!(spec.hardforks.fork(EthereumHardfork::Byzantium).active_at_block(4));
+        
+        // London should never be active
+        assert!(!spec.hardforks.fork(EthereumHardfork::London).active_at_block(1_000_000_000));
     }
 }

@@ -241,7 +241,22 @@ impl<N: NetworkPrimitives> SessionManager<N> {
     /// active [`ForkId`]. See also [`ForkFilter::set_head`].
     pub(crate) fn on_status_update(&mut self, head: Head) -> Option<ForkTransition> {
         self.status.blockhash = head.hash;
-        self.status.total_difficulty = Some(head.total_difficulty);
+        
+        // XDC chains (mainnet=50, apothem=51) need a high TD in the status message
+        // to prevent peers from dropping us as "useless" when we're at a low block number.
+        // XDC peers check TD and disconnect peers with TD=0 or very low TD immediately.
+        // We use a fake high TD (1e18) so peers consider us useful during initial sync.
+        let chain_id = self.status.chain.id();
+        let td = if chain_id == 50 || chain_id == 51 {
+            // XDC: Report a high TD to prevent immediate disconnection
+            // GP5 (and other XDC nodes) drop peers with low TD as "useless"
+            alloy_primitives::U256::from(1_000_000_000_000_000_000u128)
+        } else {
+            // Standard Ethereum: use actual TD
+            head.total_difficulty
+        };
+        self.status.total_difficulty = Some(td);
+        
         let transition = self.fork_filter.set_head(head);
         self.status.forkid = self.fork_filter.current();
         self.status.latest_block = Some(head.number);
@@ -321,8 +336,8 @@ impl<N: NetworkPrimitives> SessionManager<N> {
 
     /// Starts a new pending session from the local node to the given remote node.
     pub fn dial_outbound(&mut self, remote_addr: SocketAddr, remote_peer_id: PeerId) {
-        // XDC: Per-peer cooldown — don't redial same peer within 30 seconds
-        const DIAL_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
+        // XDC: Per-peer cooldown — don't redial same peer within 5 seconds
+        const DIAL_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(5);
         let now = std::time::Instant::now();
         if let Some(last) = self.last_dial_attempt.get(&remote_peer_id) {
             if now.duration_since(*last) < DIAL_COOLDOWN {
