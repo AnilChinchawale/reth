@@ -258,8 +258,16 @@ where
     ) -> Result<(), ReverseHeadersDownloaderError<H::Header>> {
         let mut validated = Vec::with_capacity(headers.len());
 
+        // XDC: Use cached 18-field hash when available
         let sealed_headers =
-            headers.into_par_iter().map(SealedHeader::seal_slow).collect::<Vec<_>>();
+            headers.into_par_iter().map(|h| {
+                let number = h.number();
+                if let Some(xdc_hash) = reth_eth_wire_types::xdc_hash_cache::get_xdc_hash(number) {
+                    SealedHeader::new(h, xdc_hash)
+                } else {
+                    SealedHeader::seal_slow(h)
+                }
+            }).collect::<Vec<_>>();
         for parent in sealed_headers {
             // Validate that the header is the parent header of the last validated header.
             if let Some(validated_header) =
@@ -398,7 +406,16 @@ where
                 }
 
                 let header = headers.swap_remove(0);
-                let target = SealedHeader::seal_slow(header);
+                // XDC: Use cached 18-field hash if available (seal_slow computes 15-field hash)
+                let target = {
+                    let number = header.number();
+                    if let Some(xdc_hash) = reth_eth_wire_types::xdc_hash_cache::get_xdc_hash(number) {
+                        eprintln!("[XDC-DOWNLOADER] Using cached 18-field hash for block {}: {:?}", number, xdc_hash);
+                        SealedHeader::new(header, xdc_hash)
+                    } else {
+                        SealedHeader::seal_slow(header)
+                    }
+                };
 
                 match sync_target {
                     SyncTargetBlock::Hash(hash) | SyncTargetBlock::HashAndNumber { hash, .. } => {

@@ -617,15 +617,10 @@ impl<N: NetworkPrimitives> NetworkManager<N> {
     where
         F: FnOnce(&mut Self),
     {
-        // reject message in POS
-        if self.handle.mode().is_stake() {
-            // connections to peers which send invalid messages should be terminated
-            self.swarm
-                .sessions_mut()
-                .disconnect(peer_id, Some(DisconnectReason::SubprotocolSpecific));
-        } else {
-            only_pow(self);
-        }
+        // XDC: Always allow NewBlock/NewBlockHashes - XDPoS uses PoW-style block propagation
+        // Original Ethereum PoS logic would disconnect peers for these messages (EIP-3675)
+        // but XDC needs them for consensus
+        only_pow(self);
     }
 
     /// Handles a received Message from the peer's session.
@@ -678,11 +673,7 @@ impl<N: NetworkPrimitives> NetworkManager<N> {
                 self.swarm.state_mut().discovery_mut().add_listener(tx);
             }
             NetworkHandleMessage::AnnounceBlock(block, hash) => {
-                if self.handle.mode().is_stake() {
-                    // See [EIP-3675](https://eips.ethereum.org/EIPS/eip-3675#devp2p)
-                    warn!(target: "net", "Peer performed block propagation, but it is not supported in proof of stake (EIP-3675)");
-                    return
-                }
+                // XDC: Allow block propagation (XDPoS uses PoW-style P2P)
                 let msg = NewBlockMessage { hash, block: Arc::new(block) };
                 self.swarm.state_mut().announce_new_block(msg);
             }

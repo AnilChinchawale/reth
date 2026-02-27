@@ -120,6 +120,8 @@ pub struct SessionManager<N: NetworkPrimitives> {
     /// Shared local range information that gets propagated to active sessions.
     /// This represents the range of blocks that this node can serve to other peers.
     local_range_info: BlockRangeInfo,
+    /// XDC: Per-peer dial cooldown to prevent outbound flood
+    last_dial_attempt: HashMap<PeerId, std::time::Instant>,
 }
 
 // === impl SessionManager ===
@@ -171,6 +173,7 @@ impl<N: NetworkPrimitives> SessionManager<N> {
             metrics: Default::default(),
             handshake,
             local_range_info,
+            last_dial_attempt: Default::default(),
         }
     }
 
@@ -318,6 +321,20 @@ impl<N: NetworkPrimitives> SessionManager<N> {
 
     /// Starts a new pending session from the local node to the given remote node.
     pub fn dial_outbound(&mut self, remote_addr: SocketAddr, remote_peer_id: PeerId) {
+        // XDC: Per-peer cooldown — don't redial same peer within 30 seconds
+        const DIAL_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
+        let now = std::time::Instant::now();
+        if let Some(last) = self.last_dial_attempt.get(&remote_peer_id) {
+            if now.duration_since(*last) < DIAL_COOLDOWN {
+                return; // silently skip
+            }
+        }
+        // XDC: Also skip if already connected
+        if self.active_sessions.contains_key(&remote_peer_id) {
+            eprintln!("[XDC-P2P] Skipping dial_outbound to {:?} — already in active_sessions", remote_peer_id);
+            return;
+        }
+        self.last_dial_attempt.insert(remote_peer_id, now);
         tracing::info!(target: "net::session", ?remote_addr, ?remote_peer_id, "dial_outbound: checking pending outbound limit");
         // The error can be dropped because no dial will be made if it would exceed the limit
         if self.counter.ensure_pending_outbound().is_ok() {
