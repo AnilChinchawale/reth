@@ -169,10 +169,40 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                         eprintln!("[XDC-DECODE] Decoded block {} validators_len={} validator_len={} penalties_len={}", 
                             std_h.number, _validators.len(), _validator.len(), _penalties.len());
                         
-                        // For EthPrimitives, N::BlockHeader is Header, so this works
-                        // Use unsafe transmute to bypass type check - safe because we know they're the same type
+                        // Compute XDC 18-field hash and cache it for seal_slow override
+                        {
+                            use alloy_rlp::Encodable;
+                            let mut xdc_fields = Vec::new();
+                            std_h.parent_hash.encode(&mut xdc_fields);
+                            std_h.ommers_hash.encode(&mut xdc_fields);
+                            std_h.beneficiary.encode(&mut xdc_fields);
+                            std_h.state_root.encode(&mut xdc_fields);
+                            std_h.transactions_root.encode(&mut xdc_fields);
+                            std_h.receipts_root.encode(&mut xdc_fields);
+                            std_h.logs_bloom.encode(&mut xdc_fields);
+                            std_h.difficulty.encode(&mut xdc_fields);
+                            std_h.number.encode(&mut xdc_fields);
+                            std_h.gas_limit.encode(&mut xdc_fields);
+                            std_h.gas_used.encode(&mut xdc_fields);
+                            std_h.timestamp.encode(&mut xdc_fields);
+                            std_h.extra_data.encode(&mut xdc_fields);
+                            std_h.mix_hash.encode(&mut xdc_fields);
+                            std_h.nonce.encode(&mut xdc_fields);
+                            _validators.encode(&mut xdc_fields);
+                            _validator.encode(&mut xdc_fields);
+                            _penalties.encode(&mut xdc_fields);
+                            let mut xdc_buf = Vec::new();
+                            let rlp_hdr = alloy_rlp::Header { list: true, payload_length: xdc_fields.len() };
+                            rlp_hdr.encode(&mut xdc_buf);
+                            xdc_buf.extend_from_slice(&xdc_fields);
+                            let xdc_hash = alloy_primitives::keccak256(&xdc_buf);
+                            crate::xdc_hash_cache::store_xdc_hash(std_h.number, xdc_hash);
+                            eprintln!("[XDC-HASH] Cached 18-field hash for block {}: {:?}", std_h.number, xdc_hash);
+                        }
+                        
+                        // Use unsafe transmute - safe because N::BlockHeader = Header for EthPrimitives
                         let h: N::BlockHeader = unsafe { std::mem::transmute_copy(&std_h) };
-                        std::mem::forget(std_h); // Don't drop original
+                        std::mem::forget(std_h);
                         headers.push(h);
                     }
                     

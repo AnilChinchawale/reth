@@ -52,6 +52,9 @@ pub use primitives::*;
 
 pub mod snap;
 pub mod xdc_header;
+
+/// XDC block hash cache for 18-field hash pre-computation.
+pub mod xdc_hash_cache;
 pub use snap::*;
 
 /// re-export for convenience

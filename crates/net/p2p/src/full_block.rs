@@ -197,7 +197,16 @@ where
                     match res {
                         Ok(maybe_header) => {
                             let (peer, maybe_header) =
-                                maybe_header.map(|h| h.map(SealedHeader::seal_slow)).split();
+                                maybe_header.map(|h| h.map(|hdr| {
+                                    // XDC: Check hash cache for pre-computed 18-field hash
+                                    let block_num = hdr.number();
+                                    if let Some(xdc_hash) = reth_eth_wire_types::xdc_hash_cache::get_xdc_hash(block_num) {
+                                        eprintln!("[XDC-FULLBLOCK] Using cached XDC hash for block {}: {:?}", block_num, xdc_hash);
+                                        SealedHeader::new(hdr, xdc_hash)
+                                    } else {
+                                        SealedHeader::seal_slow(hdr)
+                                    }
+                                })).split();
                             if let Some(header) = maybe_header {
                                 eprintln!("[XDC-FULLBLOCK] Header received: computed_hash={:?} expected_hash={:?} block_num={}", header.hash(), this.hash, header.number());
                                 if header.hash() == this.hash {

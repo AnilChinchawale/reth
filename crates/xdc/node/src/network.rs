@@ -71,7 +71,7 @@ where
 {
     type Network = NetworkHandle<
         BasicNetworkPrimitives<
-            reth_node_api::PrimitivesTy<N::Types>,  // Back to EthPrimitives
+            reth_node_api::PrimitivesTy<N::Types>,
             reth_transaction_pool::PoolPooledTx<Pool>,
         >,
     >;
