@@ -16,6 +16,8 @@ workspace = true
 reth-primitives-traits = { workspace = true, features = ["serde-bincode-compat"] }
 reth-ethereum-primitives.workspace = true
 reth-eth-wire-types = { workspace = true, optional = true }
+reth-codecs = { workspace = true, optional = true }
+reth-codecs-derive = { workspace = true, optional = true }
 
 # alloy
 alloy-primitives.workspace = true
@@ -28,13 +30,14 @@ serde = { workspace = true, optional = true }
 [dev-dependencies]
 
 [features]
-default = ["std", "serde"]
+default = ["std", "serde", "reth-codec"]
 std = [
     "alloy-primitives/std",
     "alloy-rlp/std",
     "alloy-consensus/std",
     "serde?/std",
     "reth-eth-wire-types?/std",
+    "reth-codecs?/std",
 ]
 serde = [
     "dep:serde",
@@ -43,3 +46,4 @@ serde = [
     "reth-primitives-traits/serde",
 ]
 reth-eth-wire-types = ["dep:reth-eth-wire-types"]
+reth-codec = ["dep:reth-codecs", "dep:reth-codecs-derive", "reth-primitives-traits/reth-codec"]

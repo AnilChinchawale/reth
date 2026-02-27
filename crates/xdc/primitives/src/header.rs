@@ -1,5 +1,7 @@
 //! XDC block header with XDPoS validator fields.
 
+extern crate alloc;
+use alloc::vec::Vec;
 use alloy_primitives::{Address, Bloom, Bytes, Sealable, B256, B64, U256};
 use alloy_rlp::{Decodable, Encodable, Header as RlpHeader};
 use core::mem;
@@ -686,6 +688,111 @@ pub fn decode_xdc_headers_to_eth(buf: &mut &[u8]) -> alloy_rlp::Result<Vec<alloy
 
 // Implement RlpBincode for SerdeBincodeCompat support
 impl reth_primitives_traits::serde_bincode_compat::RlpBincode for XdcBlockHeader {}
+
+#[cfg(feature = "reth-codec")]
+mod compact_impl {
+    use super::*;
+    use reth_codecs::Compact;
+    use alloy_primitives::bytes::BufMut;
+    use alloc::vec::Vec;
+
+    impl Compact for XdcBlockHeader {
+        fn to_compact<B: BufMut + AsMut<[u8]>>(&self, buf: &mut B) -> usize {
+            let mut written = 0;
+            
+            // Write fixed-size fields using their own Compact impl
+            written += self.parent_hash.to_compact(buf);
+            written += self.ommers_hash.to_compact(buf);
+            written += self.beneficiary.to_compact(buf);
+            written += self.state_root.to_compact(buf);
+            written += self.transactions_root.to_compact(buf);
+            written += self.receipts_root.to_compact(buf);
+            written += self.logs_bloom.to_compact(buf);
+            written += self.difficulty.to_compact(buf);
+            written += self.number.to_compact(buf);
+            written += self.gas_limit.to_compact(buf);
+            written += self.gas_used.to_compact(buf);
+            written += self.timestamp.to_compact(buf);
+            written += self.mix_hash.to_compact(buf);
+            written += self.nonce.to_compact(buf);
+            
+            // Write Option fields
+            written += self.base_fee_per_gas.to_compact(buf);
+            written += self.blob_gas_used.to_compact(buf);
+            written += self.excess_blob_gas.to_compact(buf);
+            written += self.parent_beacon_block_root.to_compact(buf);
+            written += self.requests_hash.to_compact(buf);
+            written += self.target_blobs_per_block.to_compact(buf);
+            
+            // Write XDC Bytes fields at the end
+            written += self.validators.to_compact(buf);
+            written += self.validator.to_compact(buf);
+            written += self.penalties.to_compact(buf);
+            
+            written += self.extra_data.to_compact(buf);
+            
+            written
+        }
+
+        fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+            let (parent_hash, buf) = B256::from_compact(buf, len);
+            let (ommers_hash, buf) = B256::from_compact(buf, len);
+            let (beneficiary, buf) = Address::from_compact(buf, len);
+            let (state_root, buf) = B256::from_compact(buf, len);
+            let (transactions_root, buf) = B256::from_compact(buf, len);
+            let (receipts_root, buf) = B256::from_compact(buf, len);
+            let (logs_bloom, buf) = Bloom::from_compact(buf, len);
+            let (difficulty, buf) = U256::from_compact(buf, len);
+            let (number, buf) = u64::from_compact(buf, len);
+            let (gas_limit, buf) = u64::from_compact(buf, len);
+            let (gas_used, buf) = u64::from_compact(buf, len);
+            let (timestamp, buf) = u64::from_compact(buf, len);
+            let (mix_hash, buf) = B256::from_compact(buf, len);
+            let (nonce, buf) = B64::from_compact(buf, len);
+            
+            let (base_fee_per_gas, buf) = Option::<u64>::from_compact(buf, len);
+            let (blob_gas_used, buf) = Option::<u64>::from_compact(buf, len);
+            let (excess_blob_gas, buf) = Option::<u64>::from_compact(buf, len);
+            let (parent_beacon_block_root, buf) = Option::<B256>::from_compact(buf, len);
+            let (requests_hash, buf) = Option::<B256>::from_compact(buf, len);
+            let (target_blobs_per_block, buf) = Option::<u64>::from_compact(buf, len);
+            
+            let (validators, buf) = Bytes::from_compact(buf, len);
+            let (validator, buf) = Bytes::from_compact(buf, len);
+            let (penalties, buf) = Bytes::from_compact(buf, len);
+            let (extra_data, buf) = Bytes::from_compact(buf, len);
+            
+            let header = XdcBlockHeader {
+                parent_hash,
+                ommers_hash,
+                beneficiary,
+                state_root,
+                transactions_root,
+                receipts_root,
+                logs_bloom,
+                difficulty,
+                number,
+                gas_limit,
+                gas_used,
+                timestamp,
+                extra_data,
+                mix_hash,
+                nonce,
+                validators,
+                validator,
+                penalties,
+                base_fee_per_gas,
+                blob_gas_used,
+                excess_blob_gas,
+                parent_beacon_block_root,
+                requests_hash,
+                target_blobs_per_block,
+            };
+            
+            (header, buf)
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

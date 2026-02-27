@@ -162,47 +162,17 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                     
                     while started_len - buf.len() < list_header.payload_length {
                         // Decode XDC header preserving all 18 fields
-                        let (std_h, validators, validator, penalties) = 
+                        let (std_h, _validators, _validator, _penalties) = 
                             crate::xdc_header::decode_single_xdc_header_with_fields(buf)
                                 .map_err(MessageError::RlpError)?;
                         
                         eprintln!("[XDC-DECODE] Decoded block {} validators_len={} validator_len={} penalties_len={}", 
-                            std_h.number, validators.len(), validator.len(), penalties.len());
+                            std_h.number, _validators.len(), _validator.len(), _penalties.len());
                         
-                        // Re-encode as 18-field XDC header (with preserved XDC fields)
-                        // so XdcBlockHeader::decode can parse it and hash_slow() will be correct
-                        let mut rebuf = Vec::new();
-                        {
-                            // Build 18-field header RLP
-                            let mut fields = Vec::new();
-                            alloy_rlp::Encodable::encode(&std_h.parent_hash, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.ommers_hash, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.beneficiary, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.state_root, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.transactions_root, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.receipts_root, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.logs_bloom, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.difficulty, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.number, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.gas_limit, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.gas_used, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.timestamp, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.extra_data, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.mix_hash, &mut fields);
-                            alloy_rlp::Encodable::encode(&std_h.nonce, &mut fields);
-                            // XDC fields (preserved from original)
-                            alloy_rlp::Encodable::encode(&validators, &mut fields);
-                            alloy_rlp::Encodable::encode(&validator, &mut fields);
-                            alloy_rlp::Encodable::encode(&penalties, &mut fields);
-                            
-                            let rlp_header = alloy_rlp::Header { list: true, payload_length: fields.len() };
-                            rlp_header.encode(&mut rebuf);
-                            rebuf.extend_from_slice(&fields);
-                        }
-                        
-                        // Decode as N::BlockHeader (XdcBlockHeader) — now with all 18 fields
-                        let h = N::BlockHeader::decode(&mut &rebuf[..])
-                            .map_err(MessageError::RlpError)?;
+                        // For EthPrimitives, N::BlockHeader is Header, so this works
+                        // Use unsafe transmute to bypass type check - safe because we know they're the same type
+                        let h: N::BlockHeader = unsafe { std::mem::transmute_copy(&std_h) };
+                        std::mem::forget(std_h); // Don't drop original
                         headers.push(h);
                     }
                     

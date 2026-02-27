@@ -10753,6 +10753,8 @@ dependencies = [
  "alloy-consensus",
  "alloy-primitives",
  "alloy-rlp",
+ "reth-codecs",
+ "reth-codecs-derive",
  "reth-eth-wire-types",
  "reth-ethereum-primitives",
  "reth-primitives-traits",
