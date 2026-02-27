@@ -293,6 +293,18 @@ impl<N: NetworkPrimitives> ProtocolMessage<N> {
                 EthMessage::BlockAccessLists(Self::decode_request_pair(version, buf)?)
             }
             EthMessageID::Other(_) => {
+                // XDC: For eth/63, unknown message codes are XDC-specific extensions
+                // (e.g., VoteMsg 0xe0, TimeoutMsg 0xe1, SyncInfoMsg 0xe2, future codes).
+                // Return a no-op instead of failing so the session stays alive.
+                if version.is_eth63() {
+                    let msg_id = message_type.to_u8();
+                    eprintln!("[XDC-SKIP] Unknown message ID 0x{:02x} on eth/63, skipping {} bytes", msg_id, buf.len());
+                    buf.advance(buf.len()); // consume all remaining bytes
+                    return Ok(ProtocolMessage {
+                        message_type: EthMessageID::NewBlockHashes,
+                        message: EthMessage::NewBlockHashes(NewBlockHashes(vec![]))
+                    })
+                }
                 let raw_payload = Bytes::copy_from_slice(buf);
                 buf.advance(raw_payload.len());
                 EthMessage::Other(RawCapabilityMessage::new(

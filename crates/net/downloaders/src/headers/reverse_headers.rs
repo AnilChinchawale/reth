@@ -567,6 +567,10 @@ where
     fn on_headers_error(&self, err: Box<HeadersResponseError>) {
         let HeadersResponseError { request, peer_id, error } = *err;
 
+        // XDC: Log header validation errors at eprintln level (always visible)
+        eprintln!("[XDC-HEADERS] Header validation error for request {:?}: {} (peer={:?})",
+            request, error, peer_id);
+
         self.penalize_peer(peer_id, &error);
 
         // Update error metric

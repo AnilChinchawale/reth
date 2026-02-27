@@ -39,7 +39,21 @@ impl<H: BlockHeader> EthResponseValidator for RequestResult<Vec<H>> {
 
                 match request.start {
                     BlockHashOrNumber::Number(block_number) => {
-                        headers.first().is_some_and(|header| block_number != header.number())
+                        // XDC: GP5 may return headers in ascending order (lowest block first)
+                        // even for Falling (reverse=true) requests. Accept the response if
+                        // the start block number appears at EITHER end of the response.
+                        let first_matches = headers.first()
+                            .is_some_and(|h| h.number() == block_number);
+                        let last_matches = headers.last()
+                            .is_some_and(|h| h.number() == block_number);
+                        if first_matches || last_matches {
+                            return false // valid response
+                        }
+                        eprintln!("[XDC-FETCH] is_likely_bad_headers_response: start={} first={:?} last={:?} → bad",
+                            block_number,
+                            headers.first().map(|h| h.number()),
+                            headers.last().map(|h| h.number()));
+                        true
                     }
                     BlockHashOrNumber::Hash(_) => {
                         // we don't want to hash the header
