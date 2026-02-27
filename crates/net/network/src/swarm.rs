@@ -230,13 +230,13 @@ impl<N: NetworkPrimitives> Swarm<N> {
     fn on_state_action(&mut self, event: StateAction<N>) -> Option<SwarmEvent<N>> {
         match event {
             StateAction::Connect { remote_addr, peer_id } => {
-                // XDC: Skip outbound dial if peer already has an active session
+                // XDC: Skip outbound dial if peer already has an active or pending session
                 // This prevents duplicate ECIES failures that cause peer banning
                 if self.sessions.has_active_session(&peer_id) {
-                    eprintln!("[XDC-P2P] Skipping outbound dial to {:?} - already connected", peer_id);
-                } else {
-                    self.dial_outbound(remote_addr, peer_id);
+                    eprintln!("[XDC-P2P] Skipping outbound dial to {:?} @ {:?} - already connected/pending", peer_id, remote_addr);
+                    return None  // Don't emit event either
                 }
+                self.dial_outbound(remote_addr, peer_id);
                 return Some(SwarmEvent::OutgoingTcpConnection { remote_addr, peer_id })
             }
             StateAction::Disconnect { peer_id, reason } => {

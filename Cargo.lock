@@ -10738,6 +10738,7 @@ dependencies = [
  "reth-storage-errors",
  "reth-testing-utils",
  "reth-transaction-pool",
+ "reth-xdc-primitives",
  "revm",
  "revm-primitives",
  "serde",

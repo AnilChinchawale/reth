@@ -44,6 +44,7 @@ reth-revm = { workspace = true }
 
 # XDC consensus
 reth-consensus-xdpos = { workspace = true }
+reth-xdc-primitives = { workspace = true }
 
 # Alloy dependencies
 alloy-primitives = { workspace = true }

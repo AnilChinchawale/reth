@@ -684,6 +684,9 @@ pub fn decode_xdc_headers_to_eth(buf: &mut &[u8]) -> alloy_rlp::Result<Vec<alloy
     Ok(headers.into_iter().map(Into::into).collect())
 }
 
+// Implement RlpBincode for SerdeBincodeCompat support
+impl reth_primitives_traits::serde_bincode_compat::RlpBincode for XdcBlockHeader {}
+
 #[cfg(test)]
 mod tests {
     use super::*;

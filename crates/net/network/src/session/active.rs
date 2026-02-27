@@ -772,6 +772,17 @@ impl<N: NetworkPrimitives> Future for ActiveSession<N> {
                                 }
                             }
                             Err(err) => {
+                                // XDC: Don't kill session on RLP decode errors for XDC messages
+                                // XDC headers have 18 fields vs standard 15, causing UnexpectedLength
+                                // on NewBlock, NewBlockHashes, etc. Skip and continue.
+                                let is_rlp_error = matches!(&err,
+                                    EthStreamError::InvalidMessage(MessageError::RlpError(_))
+                                );
+                                if is_rlp_error {
+                                    eprintln!("[XDC-SKIP] Skipping undecodable message (likely XDC format): {}", err);
+                                    progress = true;
+                                    continue 'receive;
+                                }
                                 debug!(target: "net::session", %err, remote_peer_id=?this.remote_peer_id, "failed to receive message");
                                 return this.close_on_error(err, cx)
                             }

@@ -71,7 +71,7 @@ where
 {
     type Network = NetworkHandle<
         BasicNetworkPrimitives<
-            reth_node_api::PrimitivesTy<N::Types>,
+            reth_xdc_primitives::XdcPrimitives,  // BlockHeader = XdcBlockHeader (18 fields, correct hash)
             reth_transaction_pool::PoolPooledTx<Pool>,
         >,
     >;

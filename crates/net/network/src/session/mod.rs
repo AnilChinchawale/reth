@@ -303,9 +303,17 @@ impl<N: NetworkPrimitives> SessionManager<N> {
         Ok(session_id)
     }
 
-    /// Check if a peer already has an active session
+    /// Check if a peer already has an active or pending session
     pub fn has_active_session(&self, peer_id: &PeerId) -> bool {
-        self.active_sessions.contains_key(peer_id)
+        let in_active = self.active_sessions.contains_key(peer_id);
+        let in_pending = self.pending_sessions.values().any(|handle| {
+            matches!(&handle.direction, Direction::Outgoing(id) if id == peer_id)
+        });
+        let result = in_active || in_pending;
+        if result {
+            eprintln!("[XDC-SESSION] has_active_session({:?}) = true (active={}, pending={})", peer_id, in_active, in_pending);
+        }
+        result
     }
 
     /// Starts a new pending session from the local node to the given remote node.
@@ -406,6 +414,7 @@ impl<N: NetworkPrimitives> SessionManager<N> {
 
     /// Removes the [`PendingSessionHandle`] if it exists.
     fn remove_active_session(&mut self, id: &PeerId) -> Option<ActiveSessionHandle<N>> {
+        eprintln!("[XDC-SESSION] Removing peer {:?} from active_sessions", id);
         let session = self.active_sessions.remove(id)?;
         self.counter.dec_active(&session.direction);
         Some(session)
@@ -453,6 +462,7 @@ impl<N: NetworkPrimitives> SessionManager<N> {
             Poll::Ready(Some(event)) => {
                 return match event {
                     ActiveSessionMessage::Disconnected { peer_id, remote_addr } => {
+                        eprintln!("[XDC-SESSION] GracefulDisconnect for peer {:?}", peer_id);
                         trace!(
                             target: "net::session",
                             ?peer_id,
@@ -466,6 +476,7 @@ impl<N: NetworkPrimitives> SessionManager<N> {
                         remote_addr,
                         error,
                     } => {
+                        eprintln!("[XDC-SESSION] ClosedOnConnectionError for peer {:?}, error: {:?}", peer_id, error);
                         trace!(target: "net::session", ?peer_id, %error,"closed session.");
                         self.remove_active_session(&peer_id);
                         Poll::Ready(SessionEvent::SessionClosedOnConnectionError {
@@ -601,6 +612,7 @@ impl<N: NetworkPrimitives> SessionManager<N> {
                     local_addr,
                 };
 
+                eprintln!("[XDC-SESSION] Adding peer {:?} to active_sessions (direction: {:?})", peer_id, direction);
                 self.active_sessions.insert(peer_id, handle);
                 self.counter.inc_active(&direction);
 
