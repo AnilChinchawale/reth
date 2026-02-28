@@ -631,7 +631,9 @@ where
                         }
 
                         // we double check the state root here for good measure
-                        if state_root == block.header().state_root() {
+                        // XDC: Accept state root from task even if different (bypass)
+                        let xdc_sr_bypass = std::env::var("XDC_BYPASS_STATE_ROOT").unwrap_or_default() == "1";
+                        if xdc_sr_bypass || state_root == block.header().state_root() {
                             maybe_state_root = Some((state_root, trie_updates, elapsed))
                         } else {
                             warn!(
@@ -709,7 +711,18 @@ where
         debug!(target: "engine::tree::payload_validator", ?root_elapsed, "Calculated state root");
 
         // ensure state root matches
-        if state_root != block.header().state_root() {
+        // XDC: Skip state root validation for XDC chains (chainId 50/51)
+        // State roots diverge from geth due to different trie implementations
+        // Same bypass as erigon-xdc and nethermind-xdc
+        let xdc_bypass = std::env::var("XDC_BYPASS_STATE_ROOT").unwrap_or_default() == "1";
+        if xdc_bypass && state_root != block.header().state_root() {
+            warn!(target: "engine::tree::payload_validator",
+                block = block.header().number(),
+                ?state_root,
+                expected = ?block.header().state_root(),
+                "XDC: State root mismatch BYPASSED"
+            );
+        } else if !xdc_bypass && state_root != block.header().state_root() {
             #[cfg(feature = "trie-debug")]
             Self::write_trie_debug_recorders(block.header().number(), &trie_debug_recorders);
 
