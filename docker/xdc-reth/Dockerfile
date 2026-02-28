@@ -5,7 +5,7 @@
 # ============================================================================
 # Stage 1: Builder - Compile the Rust binary
 # ============================================================================
-FROM rust:1.82-bookworm AS builder
+FROM rust:1.85-bookworm AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -20,9 +20,13 @@ WORKDIR /app
 # Copy the entire project
 COPY . .
 
+# Strip non-XDC workspace members to avoid build conflicts
+RUN sed -i '/"bin\/reth\//d; /"bin\/reth-bench\//d; /"bin\/reth-bench-compare\//d' Cargo.toml && \
+    sed -i '/default-members = \["bin\/reth"\]/d' Cargo.toml
+
 # Build the xdc-reth binary with XDC-specific features
 # Use release profile for optimized performance
-RUN cargo build --release --bin xdc-reth --features xdc
+RUN cargo build --release --bin xdc-reth
 
 # Verify binary exists and is executable
 RUN test -f /app/target/release/xdc-reth && \
