@@ -221,22 +221,19 @@ pub fn tipsigning_block(chain_id: u64) -> Option<u64> {
 
 /// XDC Mainnet bootnodes
 pub fn xdc_mainnet_bootnodes() -> Vec<NodeRecord> {
-    // XDC mainnet bootnodes - collected from running XDC network nodes
+    // XDC mainnet bootnodes - verified working nodes on the XDC network
+    // Keys verified from live node peer lists and known node operators
     const BOOTNODES: &[&str] = &[
-        // TEST Server (Helsinki)
-        "enode://cc5dc85e4035d4950439831f3d83fe3423e603a40b7c767496eae9973ec61088a9e0a268f4e64ba907636c56f662687b51068f5fb2bb3343e626626aece12ce7@95.217.56.168:30303",
-        // Public XDC bootnodes
-        "enode://687a4b7ee0f7e3ecdf9598db24113e2cead5cd795f1ebe69bfa007f7a261d13c08dd7c66a9c4995b0e1545c2ea24aace20504f3ddd4b6fbdcd553705cbd64e36@78.46.75.143:64506",
-        "enode://879752d7744fd2c88492c024591995e8d3da2353a24b4b8f599a545db436c928a528b435f5f862044a89d0f1edcaaedcec847a5d8f20df73f297382fe484c5be@13.124.58.33:9500",
-        "enode://8be95052933250e9fe76c86d33981fa82e6ba7fd684948f734ebc19479b1c0019fd5deb2e310013b401c56508a67548d58b9bc3cab6bfcdb3a6934e2670d2ec2@185.130.224.247:36384",
-        "enode://775e2a6a656ddf2904bd8c702f10007a0f2380ceedf56e4860a50104bd0b6a6d38a078fc0473789efb74a9eedb91f68bf9ffa34c1763cb3b2402f37e3b3c4538@54.169.174.107:31153",
-        "enode://0a1c1808658ebce358d457d979419ae87dfa492614d9fc64b5a0e226fba735d7477c4eb82c855850670ec56877729087bdf61a83334738abb5d6484fa72ba27c@18.142.144.199:9422",
-        // XinFin official bootnodes
-        "enode://149.102.140.32:30303",
-        "enode://5.189.144.192:30303",
-        "enode://37.60.243.5:30303",
-        "enode://89.117.49.48:30303",
-        "enode://38.102.87.174:30303",
+        // GP5 TEST Server (Helsinki, 95.217.56.168) - verified key from admin.nodeInfo
+        "enode://deb14d2a64aca7c11d922465cd63f24ea6050f8b5a2aff1213578ce6b1d3db223d3c3e1c517b6672ee0476641017ff8b3c9f449485aa342b492251862db5ab5e@95.217.56.168:30303",
+        // GP5 PROD Server (65.21.27.213)
+        "enode://f164c4adb9c873ee08871bea823e1d6fecfbfbc7a3520107eda1563f1d845d0774042aeadc9b3803ef23e820b528b191ca74ed74bca0c57cc84084ba3061ff5b@65.21.27.213:30303",
+        // Live peers observed from GP5 node (queried via admin.peers)
+        "enode://242b54d7bdb11df7e88c99410a1dbbec89113b66dc9d5cbd43bcf6d9598603c8e0b762c64d0bacf57c4963b91aad7d08210e583f4934150dec5b3c4b09f380b8@193.247.81.143:24209",
+        "enode://c6f35bb943de22a6ec44b681562455cb1149a8e29e471e181b3ac0ba6f77b1ad24fdb36a4ce2048ea7b72eed0aca308da92d042e15c5d5efd48643ccd4f89843@13.212.16.184:5197",
+        "enode://9051fdab889927fa9692a7f10697c188eb375b6d6eb295b19722a16dddcfd6c11d6e759d4522cbb567e9078f3ce684010ff9641b1d9e87e66a1111527cd039c6@158.255.5.87:38446",
+        "enode://6167dc36ef3cf66a3152ff0ceae1ad10e20bcf19f0aabad4362ed4cc2cb170e3f8b3e1e828686bfd7528a19d5ae5334ae1e369a3223ddc64b5a3c8a5e82bfb34@81.0.220.137:41302",
+        "enode://03636e1854a177cd61c225e96549c010d52238d8fb854dcec97f4f404dc2b76ab38d322eb83bd2010b1cb1ac9be73f5152c8ef22e2f73ce0042af6c0de2e1f30@38.49.210.142:47204",
     ];
     
     BOOTNODES
