@@ -702,17 +702,18 @@ impl<N: NetworkPrimitives> NetworkConfigBuilder<N> {
             status.chain = id.into();
         }
         
-        // XDC chains (mainnet=50, apothem=51) need a high TD in the status message
-        // to prevent peers from dropping us as "useless" when we're at block 0.
-        // XDC peers check TD and disconnect peers with TD=0 immediately.
+        // XDC chains (mainnet=50, apothem=51) need a LOW TD in the status message.
+        // If we report high TD, GP5 thinks we have more blocks and calls SynchroniseXDC(reth).
+        // Since we're at block 0, findAncestorXDC returns errInvalidAncestor → DiscUselessPeer.
+        // With TD=1, GP5's synchronise() skips sync-from-reth, keeping the connection open.
         let effective_chain_id = chain_id;
         if effective_chain_id == 50 || effective_chain_id == 51 {
-            // Use a high fake TD so XDC peers consider us useful
-            status.total_difficulty = Some(alloy_primitives::U256::from(1_000_000_000_000_000_000u128));
+            // Use TD=1 so GP5 doesn't try to sync FROM us (we sync FROM them)
+            status.total_difficulty = Some(alloy_primitives::U256::from(1u64));
             tracing::info!(
                 chain_id = effective_chain_id,
                 td = ?status.total_difficulty,
-                "XDC chain detected - using high TD to prevent peer disconnection"
+                "XDC chain detected - using low TD to prevent GP5 useless-peer disconnect"
             );
         }
 

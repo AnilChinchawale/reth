@@ -242,15 +242,15 @@ impl<N: NetworkPrimitives> SessionManager<N> {
     pub(crate) fn on_status_update(&mut self, head: Head) -> Option<ForkTransition> {
         self.status.blockhash = head.hash;
         
-        // XDC chains (mainnet=50, apothem=51) need a high TD in the status message
-        // to prevent peers from dropping us as "useless" when we're at a low block number.
-        // XDC peers check TD and disconnect peers with TD=0 or very low TD immediately.
-        // We use a fake high TD (1e18) so peers consider us useful during initial sync.
+        // XDC chains (mainnet=50, apothem=51) need a LOW TD in the status message.
+        // If we report high TD (e.g. 1e18), GP5 thinks we have more blocks and calls
+        // SynchroniseXDC(reth). Since we're at a low block, findAncestorXDC returns
+        // errInvalidAncestor (common ancestor below floor) → dropPeer → DiscUselessPeer.
+        // With TD=1, GP5's synchronise() skips sync-from-reth early, keeping connection open.
         let chain_id = self.status.chain.id();
         let td = if chain_id == 50 || chain_id == 51 {
-            // XDC: Report a high TD to prevent immediate disconnection
-            // GP5 (and other XDC nodes) drop peers with low TD as "useless"
-            alloy_primitives::U256::from(1_000_000_000_000_000_000u128)
+            // XDC: Report TD=1 so GP5 doesn't try to sync FROM us (we sync FROM them)
+            alloy_primitives::U256::from(1u64)
         } else {
             // Standard Ethereum: use actual TD
             head.total_difficulty
