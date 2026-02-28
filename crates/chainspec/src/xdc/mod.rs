@@ -120,28 +120,25 @@ pub static XDC_MAINNET: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
 });
 
 /// XDC Apothem Testnet chain spec
+///
+/// Loaded from the real XDC Apothem genesis JSON which includes:
+/// - Correct timestamp: 0x5d02164f (1560432207)
+/// - Correct gasLimit: 0x47b760 (4700000)
+/// - Full alloc with system contracts
+/// - Correct extraData with initial validator masternodes
 pub static XDC_APOTHEM: LazyLock<Arc<ChainSpec>> = LazyLock::new(|| {
-    let genesis = Genesis {
-        nonce: 0,
-        timestamp: 1546272000,
-        extra_data: Default::default(),
-        gas_limit: 50_000_000,
-        difficulty: U256::from(1),
-        mix_hash: B256::ZERO,
-        coinbase: Address::ZERO,
-        alloc: Default::default(),
-        ..Default::default()
-    };
+    let genesis: Genesis = serde_json::from_str(include_str!("../../res/genesis/xdc-apothem.json"))
+        .expect("Can't deserialize XDC Apothem genesis json");
 
     let hardforks = ChainHardforks::new(vec![
-        (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Constantinople.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Petersburg.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Istanbul.boxed(), ForkCondition::Block(0)),
-        (EthereumHardfork::Berlin.boxed(), ForkCondition::Block(0)),
+        (EthereumHardfork::Homestead.boxed(), ForkCondition::Block(1)),
+        (EthereumHardfork::Tangerine.boxed(), ForkCondition::Block(2)),
+        (EthereumHardfork::SpuriousDragon.boxed(), ForkCondition::Block(3)),
+        (EthereumHardfork::Byzantium.boxed(), ForkCondition::Block(4)),
+        (EthereumHardfork::Constantinople.boxed(), ForkCondition::Never),
+        (EthereumHardfork::Petersburg.boxed(), ForkCondition::Never),
+        (EthereumHardfork::Istanbul.boxed(), ForkCondition::Never),
+        (EthereumHardfork::Berlin.boxed(), ForkCondition::Never),
         (EthereumHardfork::London.boxed(), ForkCondition::Never),
     ]);
 
