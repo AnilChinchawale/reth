@@ -1,6 +1,6 @@
 //! XDPoS Configuration Types
 
-use alloy_primitives::Address;
+use alloy_primitives::{Address, address};
 use serde::{Deserialize, Serialize};
 
 /// XDPoS consensus configuration
@@ -166,9 +166,9 @@ pub fn xdc_mainnet_config() -> XDPoSConfig {
         gap: 450,
         reward: 250_000_000_000_000_000_000,
         reward_checkpoint: 900,
-        foundation_wallet: Address::ZERO, // TODO: Set actual foundation wallet
+        foundation_wallet: address!("0x746249c61f5832c5eed53172776b460491bdcd5c"), // XDC mainnet foundation wallet
         v2: Some(V2Config {
-            switch_block: 56_857_600,
+            switch_block: 80_370_000, // TIPV2SwitchBlock — constants.mainnet.go
             mine_period: 2,
             timeout_period: 10,
             cert_threshold: 67,
@@ -184,9 +184,9 @@ pub fn xdc_apothem_config() -> XDPoSConfig {
         gap: 450,
         reward: 250_000_000_000_000_000_000,
         reward_checkpoint: 900,
-        foundation_wallet: Address::ZERO,
+        foundation_wallet: address!("0x746249c61f5832c5eed53172776b460491bdcd5c"), // Apothem foundation wallet
         v2: Some(V2Config {
-            switch_block: 0, // TODO: Set actual testnet switch block
+            switch_block: 56_828_700, // TIPV2SwitchBlock — constants.testnet.go
             mine_period: 2,
             timeout_period: 10,
             cert_threshold: 67,
