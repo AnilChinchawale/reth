@@ -106,12 +106,18 @@ where
     }
 
     fn evm_env(&self, header: &Header) -> Result<EvmEnv<SpecId>, Self::Error> {
-        Ok(EvmEnv::for_eth_block(
+        let mut env = EvmEnv::for_eth_block(
             header,
             self.chain_spec.as_ref(),
             self.chain_spec.chain().id(),
             self.chain_spec.blob_params_at_timestamp(header.timestamp),
-        ))
+        );
+        // XDC gasBailout: disable balance check for XDC chains to handle reward blocks
+        // where accumulated state root divergence causes "insufficient sender balance" errors
+        if self.disable_eip158_state_clear() {
+            env.cfg_env.disable_balance_check = true;
+        }
+        Ok(env)
     }
 
     fn next_evm_env(
@@ -119,7 +125,7 @@ where
         parent: &Header,
         attributes: &NextBlockEnvAttributes,
     ) -> Result<EvmEnv, Self::Error> {
-        Ok(EvmEnv::for_eth_next_block(
+        let mut env = EvmEnv::for_eth_next_block(
             parent,
             NextEvmEnvAttributes {
                 timestamp: attributes.timestamp,
@@ -131,7 +137,12 @@ where
             self.chain_spec.as_ref(),
             self.chain_spec.chain().id(),
             self.chain_spec.blob_params_at_timestamp(attributes.timestamp),
-        ))
+        );
+        // XDC gasBailout: disable balance check for XDC chains
+        if self.disable_eip158_state_clear() {
+            env.cfg_env.disable_balance_check = true;
+        }
+        Ok(env)
     }
 
     fn context_for_block<'a>(
@@ -195,6 +206,13 @@ where
         // if self.chain_spec.is_osaka_active_at_timestamp(timestamp) {
         //     cfg_env.tx_gas_limit_cap = Some(MAX_TX_GAS_LIMIT_OSAKA);
         // }
+
+        // XDC gasBailout: disable balance check for XDC chains to handle reward blocks
+        // where accumulated state root divergence causes "insufficient sender balance" errors
+        let chain_id = self.chain_spec.chain().id();
+        if chain_id == 50 || chain_id == 51 {
+            cfg_env.disable_balance_check = true;
+        }
 
         // derive the EIP-4844 blob fees
         let blob_excess_gas_and_price =
